@@ -14,6 +14,7 @@ export default function StartRound() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const [otherPlayerIds, setOtherPlayerIds] = useState<string[]>(["", "", ""]);
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,14 +61,16 @@ export default function StartRound() {
     setError(null);
     setLoading("Starting round…");
     try {
+      const player_ids = otherPlayerIds.map((s) => s.trim()).filter(Boolean);
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
-        body: JSON.stringify({ course_id: selectedCourseId }),
+        body: JSON.stringify({ course_id: selectedCourseId, player_ids }),
       });
       setRound(created);
     } catch (e) {
       const err = e as ApiError;
-      setError(`Failed to start round (${err.status}).`);
+      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      setError(msg ? `${msg} (${err.status}).` : `Failed to start round (${err.status}).`);
     } finally {
       setLoading(null);
     }
@@ -148,6 +151,25 @@ export default function StartRound() {
             )}
           </select>
         </label>
+
+        <div style={{ display: "grid", gap: ".5rem" }}>
+          <div style={{ fontWeight: 700 }}>Players (up to 4)</div>
+          <div className="auth-mono">You: {viewerId || "—"}</div>
+          {otherPlayerIds.map((pid, idx) => (
+            <input
+              key={idx}
+              placeholder="Other player Auth0 sub (optional)"
+              value={pid}
+              onChange={(e) =>
+                setOtherPlayerIds((prev) => {
+                  const next = [...prev];
+                  next[idx] = e.target.value;
+                  return next;
+                })
+              }
+            />
+          ))}
+        </div>
 
         <button
           className="auth-btn primary"

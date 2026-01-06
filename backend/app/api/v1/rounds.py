@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
@@ -15,6 +16,10 @@ router = APIRouter()
 class RoundCreate(BaseModel):
     course_id: int
     player_ids: list[str] | None = None
+
+
+class RoundAddParticipants(BaseModel):
+    player_ids: list[str]
 
 
 class ScoreIn(BaseModel):
@@ -71,6 +76,14 @@ def create_round(
 ):
     owner = ensure_player(db, user_id)
 
+    active = db.execute(
+        select(Round.id)
+        .where(Round.owner_player_id == owner.id, Round.completed_at.is_(None))
+        .limit(1)
+    ).first()
+    if active:
+        raise HTTPException(status_code=409, detail="You already have an active round")
+
     course = db.execute(
         select(Course)
         .options(joinedload(Course.holes))
@@ -101,6 +114,70 @@ def create_round(
     db.commit()
 
     return _round_to_out(db, rnd.id, owner.id)
+
+
+@router.post("/rounds/{round_id}/participants")
+def add_round_participants(
+    round_id: int,
+    payload: RoundAddParticipants,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    owner = ensure_player(db, user_id)
+    rnd = db.execute(
+        select(Round)
+        .options(joinedload(Round.participants).joinedload(RoundParticipant.player))
+        .where(Round.id == round_id, Round.owner_player_id == owner.id)
+    ).scalars().unique().one_or_none()
+    if not rnd:
+        raise HTTPException(status_code=404, detail="Round not found")
+    if rnd.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Round already completed")
+
+    existing_external_ids = {p.player.external_id for p in rnd.participants}
+    to_add = []
+    for pid in payload.player_ids:
+        pid = (pid or "").strip()
+        if pid and pid not in existing_external_ids:
+            to_add.append(pid)
+
+    if not to_add:
+        return {"ok": True}
+
+    if len(existing_external_ids) + len(to_add) > 4:
+        raise HTTPException(status_code=400, detail="max 4 players")
+
+    for ext in to_add:
+        p = ensure_player(db, ext)
+        db.add(RoundParticipant(round_id=rnd.id, player_id=p.id))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Player already in round")
+
+    return {"ok": True}
+
+
+@router.delete("/rounds/{round_id}")
+def delete_round(
+    round_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    owner = ensure_player(db, user_id)
+    rnd = db.execute(
+        select(Round).where(Round.id == round_id, Round.owner_player_id == owner.id)
+    ).scalars().one_or_none()
+    if not rnd:
+        raise HTTPException(status_code=404, detail="Round not found")
+    if rnd.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Cannot delete a completed round")
+
+    db.delete(rnd)
+    db.commit()
+    return {"ok": True}
 
 
 @router.post("/rounds/{round_id}/scores", response_model=HoleScoreOut)

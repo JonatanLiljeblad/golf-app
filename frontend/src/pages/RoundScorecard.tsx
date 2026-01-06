@@ -31,18 +31,55 @@ export default function RoundScorecard() {
     }
   }
 
-  async function submitScore(holeNumber: number, strokes: number) {
+  const [inviteId, setInviteId] = useState("");
+
+  const isOwner = !!round && viewerId && round.owner_id === viewerId;
+
+  async function submitScore(holeNumber: number, playerId: string, strokes: number) {
     if (!round || round.completed_at) return;
     setError(null);
     try {
       await request(`/api/v1/rounds/${round.id}/scores`, {
         method: "POST",
-        body: JSON.stringify({ hole_number: holeNumber, strokes }),
+        body: JSON.stringify({ hole_number: holeNumber, strokes, player_id: playerId }),
       });
       await load(round.id);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to submit score (${err.status}).`);
+    }
+  }
+
+  async function addPlayer() {
+    if (!round || !isOwner || round.completed_at) return;
+    const pid = inviteId.trim();
+    if (!pid) return;
+
+    setError(null);
+    try {
+      await request(`/api/v1/rounds/${round.id}/participants`, {
+        method: "POST",
+        body: JSON.stringify({ player_ids: [pid] }),
+      });
+      setInviteId("");
+      await load(round.id);
+    } catch (e) {
+      const err = e as ApiError;
+      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      setError(msg ? `${msg} (${err.status}).` : `Failed to add player (${err.status}).`);
+    }
+  }
+
+  async function deleteRound() {
+    if (!round || !isOwner || round.completed_at) return;
+    setError(null);
+    try {
+      await request(`/api/v1/rounds/${round.id}`, { method: "DELETE" });
+      window.location.href = "/rounds";
+    } catch (e) {
+      const err = e as ApiError;
+      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      setError(msg ? `${msg} (${err.status}).` : `Failed to delete round (${err.status}).`);
     }
   }
 
@@ -89,7 +126,7 @@ export default function RoundScorecard() {
                 </div>
                 <div className="auth-mono">Par {round.total_par}</div>
                 <div className="auth-mono">
-                  {round.completed_at ? "Completed" : "In progress"} · Total strokes: {round.total_strokes ?? "—"}
+                  {round.completed_at ? "Completed" : "In progress"} · Your strokes: {round.total_strokes ?? "—"}
                 </div>
               </div>
               <button className="auth-btn secondary" onClick={() => void load(round.id)}>
@@ -99,33 +136,73 @@ export default function RoundScorecard() {
           </div>
 
           <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
-            <div style={{ display: "grid", gap: ".5rem" }}>
-              {round.holes.map((h) => (
-                <div
-                  key={h.number}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr auto",
-                    gap: ".75rem",
-                    alignItems: "center",
-                  }}
-                >
-                  <div className="auth-mono">Hole {h.number} · Par {h.par}</div>
-                  <input
-                    type="number"
-                    min={1}
-                    max={30}
-                    defaultValue={(viewerId && h.strokes[viewerId]) ?? ""}
-                    placeholder="strokes"
-                    disabled={!!round.completed_at}
-                    onBlur={(e) => {
-                      const v = Number(e.target.value);
-                      if (Number.isFinite(v) && v > 0) void submitScore(h.number, v);
-                    }}
-                    style={{ width: 120 }}
-                  />
+            <div style={{ display: "grid", gap: ".75rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+                <div className="auth-mono">Players: {round.player_ids.length} / 4</div>
+                {isOwner && !round.completed_at && (
+                  <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+                    <input
+                      placeholder="Invite player (Auth0 sub)"
+                      value={inviteId}
+                      onChange={(e) => setInviteId(e.target.value)}
+                      style={{ width: 260 }}
+                    />
+                    <button className="auth-btn secondary" onClick={() => void addPlayer()} disabled={!inviteId.trim()}>
+                      Add
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {isOwner && !round.completed_at && (
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <button className="auth-btn secondary" onClick={() => void deleteRound()}>
+                    Delete round
+                  </button>
                 </div>
-              ))}
+              )}
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `120px 80px repeat(${round.player_ids.length}, 1fr)`,
+                  gap: ".5rem",
+                  alignItems: "center",
+                }}
+              >
+                <div className="auth-mono">Hole</div>
+                <div className="auth-mono">Par</div>
+                {round.player_ids.map((pid) => (
+                  <div key={pid} className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {pid === viewerId ? "You" : pid}
+                  </div>
+                ))}
+
+                {round.holes.map((h) => (
+                  <div key={h.number} style={{ display: "contents" }}>
+                    <div className="auth-mono">{h.number}</div>
+                    <div className="auth-mono">{h.par}</div>
+                    {round.player_ids.map((pid) => {
+                      const canEdit = !round.completed_at && (pid === viewerId || isOwner);
+                      return (
+                        <input
+                          key={`${h.number}-${pid}`}
+                          type="number"
+                          min={1}
+                          max={30}
+                          defaultValue={h.strokes[pid] ?? ""}
+                          placeholder="strokes"
+                          disabled={!canEdit}
+                          onBlur={(e) => {
+                            const v = Number(e.target.value);
+                            if (Number.isFinite(v) && v > 0) void submitScore(h.number, pid, v);
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </>
