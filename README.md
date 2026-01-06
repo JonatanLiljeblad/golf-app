@@ -46,3 +46,38 @@ uv run pytest
 
 Notes:
 - `DATABASE_URL` defaults to SQLite (`sqlite:///./golf.db`) and can be overridden in `backend/.env`.
+
+## Frontend (local dev)
+
+```bash
+cd frontend
+
+# Install deps
+npm install
+
+# Configure Auth0 + API URL
+cp .env.example .env
+
+# Run dev server
+npm run dev
+
+# Lint / test / build
+npm run lint
+npm test
+npm run build
+```
+
+Notes:
+- The frontend requires `VITE_AUTH0_DOMAIN` + `VITE_AUTH0_CLIENT_ID` to be set (see `frontend/.env.example`).
+- If you set `VITE_AUTH0_AUDIENCE`, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
+
+## Push to GitHub
+
+```bash
+git status
+
+git add -A
+git commit -m "Add rounds list + scorecard"
+
+git push
+```
