@@ -125,22 +125,53 @@ def upgrade() -> None:
         )
         batch.create_index(op.f("ix_round_participants_player_id"), ["player_id"], unique=False)
 
-    with op.batch_alter_table("hole_scores", recreate="always") as batch:
-        batch.drop_index(op.f("ix_hole_scores_player_id"))
-        batch.drop_constraint("uq_score_round_player_hole", type_="unique")
-        batch.drop_column("player_id")
-        batch.alter_column("player_id_int", new_column_name="player_id", nullable=False)
-        batch.create_foreign_key(
+    if dialect == "postgresql":
+        op.drop_constraint("uq_score_round_player_hole", "hole_scores", type_="unique")
+        op.drop_index(op.f("ix_hole_scores_player_id"), table_name="hole_scores")
+        op.drop_column("hole_scores", "player_id")
+        op.alter_column(
+            "hole_scores",
+            "player_id_int",
+            new_column_name="player_id",
+            existing_type=sa.Integer(),
+            nullable=False,
+        )
+        op.create_foreign_key(
             "fk_hole_scores_player_id_players",
+            "hole_scores",
             "players",
             ["player_id"],
             ["id"],
             ondelete="RESTRICT",
         )
-        batch.create_unique_constraint(
-            "uq_score_round_player_hole", ["round_id", "player_id", "hole_number"]
+        op.create_unique_constraint(
+            "uq_score_round_player_hole", "hole_scores", ["round_id", "player_id", "hole_number"]
         )
-        batch.create_index(op.f("ix_hole_scores_player_id"), ["player_id"], unique=False)
+        op.create_index(op.f("ix_hole_scores_player_id"), "hole_scores", ["player_id"], unique=False)
+    else:
+        # SQLite: manual table rebuild (avoids batch index-copy issues).
+        op.create_table(
+            "hole_scores_new",
+            sa.Column("id", sa.Integer(), nullable=False),
+            sa.Column("round_id", sa.Integer(), nullable=False),
+            sa.Column("player_id", sa.Integer(), nullable=False),
+            sa.Column("hole_number", sa.Integer(), nullable=False),
+            sa.Column("strokes", sa.Integer(), nullable=False),
+            sa.ForeignKeyConstraint(["round_id"], ["rounds.id"], ondelete="CASCADE"),
+            sa.ForeignKeyConstraint(["player_id"], ["players.id"], ondelete="RESTRICT"),
+            sa.PrimaryKeyConstraint("id"),
+            sa.UniqueConstraint(
+                "round_id", "player_id", "hole_number", name="uq_score_round_player_hole"
+            ),
+        )
+        op.execute(
+            "INSERT INTO hole_scores_new (id, round_id, player_id, hole_number, strokes) "
+            "SELECT id, round_id, player_id_int, hole_number, strokes FROM hole_scores"
+        )
+        op.drop_table("hole_scores")
+        op.rename_table("hole_scores_new", "hole_scores")
+        op.create_index(op.f("ix_hole_scores_round_id"), "hole_scores", ["round_id"], unique=False)
+        op.create_index(op.f("ix_hole_scores_player_id"), "hole_scores", ["player_id"], unique=False)
 
 
 def downgrade() -> None:
