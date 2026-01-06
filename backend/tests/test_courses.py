@@ -39,13 +39,13 @@ def test_create_and_list_courses(client):
         "holes": [{"number": i, "par": 4} for i in range(1, 10)],
     }
 
-    resp = client.post("/api/v1/courses", json=payload)
+    resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
     assert resp.status_code == 201
     data = resp.json()
     assert data["name"] == "My Course"
     assert len(data["holes"]) == 9
 
-    resp2 = client.get("/api/v1/courses")
+    resp2 = client.get("/api/v1/courses", headers={"X-User-Id": "u1"})
     assert resp2.status_code == 200
     courses = resp2.json()
     assert len(courses) == 1

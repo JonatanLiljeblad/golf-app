@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_db
+from app.api.deps import get_current_user_id, get_db
 from app.models.course import Course, Hole
 
 router = APIRouter()
@@ -46,8 +46,12 @@ class CourseOut(BaseModel):
 
 
 @router.post("/courses", response_model=CourseOut, status_code=201)
-def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
-    course = Course(name=payload.name)
+def create_course(
+    payload: CourseCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    course = Course(user_id=user_id, name=payload.name)
     course.holes = [Hole(number=h.number, par=h.par) for h in payload.holes]
 
     db.add(course)
@@ -62,14 +66,30 @@ def create_course(payload: CourseCreate, db: Session = Depends(get_db)):
 
 
 @router.get("/courses", response_model=list[CourseOut])
-def list_courses(db: Session = Depends(get_db)):
-    stmt = select(Course).options(joinedload(Course.holes)).order_by(Course.id)
+def list_courses(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    stmt = (
+        select(Course)
+        .options(joinedload(Course.holes))
+        .where(Course.user_id == user_id)
+        .order_by(Course.id)
+    )
     return db.execute(stmt).scalars().unique().all()
 
 
 @router.get("/courses/{course_id}", response_model=CourseOut)
-def get_course(course_id: int, db: Session = Depends(get_db)):
-    stmt = select(Course).options(joinedload(Course.holes)).where(Course.id == course_id)
+def get_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    stmt = (
+        select(Course)
+        .options(joinedload(Course.holes))
+        .where(Course.id == course_id, Course.user_id == user_id)
+    )
     course = db.execute(stmt).scalars().unique().one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")

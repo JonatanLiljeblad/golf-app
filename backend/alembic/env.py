@@ -14,6 +14,7 @@ from app.db.base import Base
 
 # Import models so Base.metadata is populated
 import app.models.course  # noqa: F401
+import app.models.round  # noqa: F401
 
 # this is the Alembic Config object, which provides access to the values within
 # the .ini file in use.
