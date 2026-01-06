@@ -7,8 +7,10 @@ import type { Course, Round } from "../api/types";
 type ApiError = { status: number; body: unknown };
 
 export default function StartRound() {
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { request } = useApi();
+
+  const viewerId = user?.sub ?? "";
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
@@ -197,7 +199,7 @@ export default function StartRound() {
                   type="number"
                   min={1}
                   max={30}
-                  defaultValue={h.strokes ?? ""}
+                  defaultValue={(viewerId && h.strokes[viewerId]) ?? ""}
                   placeholder="strokes"
                   onBlur={(e) => {
                     const v = Number(e.target.value);

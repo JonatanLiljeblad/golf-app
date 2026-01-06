@@ -101,6 +101,7 @@ export default function MyRounds() {
                 <div style={{ textAlign: "right" }}>
                   <div className="auth-mono">Par {r.total_par}</div>
                   <div className="auth-mono">Strokes: {r.total_strokes ?? "—"}</div>
+                  <div className="auth-mono">Players: {r.players_count}</div>
                   <div style={{ marginTop: ".5rem" }}>
                     <Link
                       className="auth-btn secondary"

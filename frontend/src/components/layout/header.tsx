@@ -16,6 +16,7 @@ export default function Header() {
     >
       <nav style={{ display: "flex", gap: "1rem" }}>
         <Link to="/">Home</Link>
+        <Link to="/courses">Courses</Link>
         <Link to="/round/start">Start Round</Link>
         <Link to="/rounds">My Rounds</Link>
         <Link to="/profile">Profile</Link>

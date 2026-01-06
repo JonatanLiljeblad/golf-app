@@ -6,17 +6,24 @@ export type Course = {
   holes: Hole[];
 };
 
-export type RoundHole = { number: number; par: number; strokes: number | null };
+export type RoundHole = {
+  number: number;
+  par: number;
+  strokes: Record<string, number | null>;
+};
 
 export type Round = {
   id: number;
   course_id: number;
   course_name: string;
+  owner_id: string;
+  player_ids: string[];
   started_at: string;
   completed_at: string | null;
   holes: RoundHole[];
   total_par: number;
   total_strokes: number | null;
+  total_strokes_by_player: Record<string, number | null>;
 };
 
 export type RoundSummary = {
@@ -27,4 +34,5 @@ export type RoundSummary = {
   completed_at: string | null;
   total_par: number;
   total_strokes: number | null;
+  players_count: number;
 };

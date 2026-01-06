@@ -8,8 +8,10 @@ type ApiError = { status: number; body: unknown };
 
 export default function RoundScorecard() {
   const { roundId } = useParams();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { request } = useApi();
+
+  const viewerId = user?.sub ?? "";
 
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
@@ -113,7 +115,7 @@ export default function RoundScorecard() {
                     type="number"
                     min={1}
                     max={30}
-                    defaultValue={h.strokes ?? ""}
+                    defaultValue={(viewerId && h.strokes[viewerId]) ?? ""}
                     placeholder="strokes"
                     disabled={!!round.completed_at}
                     onBlur={(e) => {
