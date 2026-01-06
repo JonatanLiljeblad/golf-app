@@ -8,10 +8,12 @@ import urllib.request
 from fastapi import Header, HTTPException
 from jose import jwt
 from jose.exceptions import JWTError
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.settings import settings
 from app.db.session import SessionLocal
+from app.models.player import Player
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -20,6 +22,18 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+def ensure_player(db: Session, external_id: str) -> Player:
+    external_id = (external_id or "").strip()
+    player = db.execute(select(Player).where(Player.external_id == external_id)).scalars().one_or_none()
+    if player:
+        return player
+
+    player = Player(external_id=external_id)
+    db.add(player)
+    db.flush()
+    return player
 
 
 _JWKS_CACHE: dict | None = None

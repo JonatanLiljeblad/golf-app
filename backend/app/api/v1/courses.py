@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.deps import get_current_user_id, get_db
+from app.api.deps import ensure_player, get_current_user_id, get_db
 from app.models.course import Course, Hole
+from app.models.round import Round
 
 router = APIRouter()
 
@@ -51,7 +53,8 @@ def create_course(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    course = Course(user_id=user_id, name=payload.name)
+    owner = ensure_player(db, user_id)
+    course = Course(owner_player_id=owner.id, name=payload.name)
     course.holes = [Hole(number=h.number, par=h.par) for h in payload.holes]
 
     db.add(course)
@@ -70,10 +73,11 @@ def list_courses(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
+    owner = ensure_player(db, user_id)
     stmt = (
         select(Course)
         .options(joinedload(Course.holes))
-        .where(Course.user_id == user_id)
+        .where(Course.owner_player_id == owner.id)
         .order_by(Course.id)
     )
     return db.execute(stmt).scalars().unique().all()
@@ -85,12 +89,42 @@ def get_course(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
+    owner = ensure_player(db, user_id)
     stmt = (
         select(Course)
         .options(joinedload(Course.holes))
-        .where(Course.id == course_id, Course.user_id == user_id)
+        .where(Course.id == course_id, Course.owner_player_id == owner.id)
     )
     course = db.execute(stmt).scalars().unique().one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return course
+
+
+@router.delete("/courses/{course_id}")
+def delete_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    owner = ensure_player(db, user_id)
+    course = db.execute(
+        select(Course).where(Course.id == course_id, Course.owner_player_id == owner.id)
+    ).scalars().one_or_none()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+
+    in_use = db.execute(
+        select(Round.id).where(Round.course_id == course_id, Round.owner_player_id == owner.id).limit(1)
+    ).first()
+    if in_use:
+        raise HTTPException(status_code=409, detail="Course is in use")
+
+    try:
+        db.delete(course)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Course is in use")
+
+    return {"ok": True}

@@ -8,8 +8,12 @@ class Course(Base):
     __tablename__ = "courses"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    owner_player_id: Mapped[int] = mapped_column(
+        ForeignKey("players.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+
+    owner = relationship("Player")
 
     holes: Mapped[list["Hole"]] = relationship(
         back_populates="course",

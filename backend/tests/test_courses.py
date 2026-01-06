@@ -6,6 +6,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.deps import get_db
 from app.db.base import Base
+import app.models.player  # noqa: F401
 import app.models.course  # noqa: F401
 from app.main import app
 
@@ -50,3 +51,10 @@ def test_create_and_list_courses(client):
     courses = resp2.json()
     assert len(courses) == 1
     assert courses[0]["name"] == "My Course"
+
+    d = client.delete(f"/api/v1/courses/{data['id']}", headers={"X-User-Id": "u1"})
+    assert d.status_code == 200
+
+    resp3 = client.get("/api/v1/courses", headers={"X-User-Id": "u1"})
+    assert resp3.status_code == 200
+    assert resp3.json() == []

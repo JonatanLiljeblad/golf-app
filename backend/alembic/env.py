@@ -13,6 +13,7 @@ from app.core.settings import settings
 from app.db.base import Base
 
 # Import models so Base.metadata is populated
+import app.models.player  # noqa: F401
 import app.models.course  # noqa: F401
 import app.models.round  # noqa: F401
 

@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.v1.courses import router as courses_router
 from app.api.v1.health import router as health_router
+from app.api.v1.players import router as players_router
 from app.api.v1.rounds import router as rounds_router
 from app.core.settings import settings
 
@@ -26,6 +27,11 @@ app.include_router(
     courses_router,
     prefix=settings.API_V1_STR,
     tags=["Courses"],
+)
+app.include_router(
+    players_router,
+    prefix=settings.API_V1_STR,
+    tags=["Players"],
 )
 app.include_router(
     rounds_router,

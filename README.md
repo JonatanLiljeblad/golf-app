@@ -34,6 +34,9 @@ uv pip install -r requirements.txt -r requirements-dev.txt
 # Optional: copy env config
 cp .env.example .env
 
+# Run migrations (needed after pulling schema changes)
+uv run alembic upgrade head
+
 # Run API
 uv run uvicorn app.main:app --reload
 

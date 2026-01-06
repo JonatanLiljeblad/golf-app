@@ -35,7 +35,7 @@ def client():
     app.dependency_overrides.clear()
 
 
-def test_round_flow(client):
+def test_group_round_owner_can_enter_scores_for_all(client):
     course_payload = {
         "name": "Test Course",
         "holes": [{"number": i, "par": 4} for i in range(1, 10)],
@@ -45,47 +45,50 @@ def test_round_flow(client):
     ).json()
 
     r = client.post(
-        "/api/v1/rounds", json={"course_id": c["id"]}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds",
+        json={"course_id": c["id"], "player_ids": ["u2", "u3"]},
+        headers={"X-User-Id": "u1"},
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
-    assert r.json()["course_name"] == "Test Course"
+    assert r.json()["owner_id"] == "u1"
+    assert set(r.json()["player_ids"]) == {"u1", "u2", "u3"}
 
-    lst = client.get("/api/v1/rounds", headers={"X-User-Id": "u1"})
-    assert lst.status_code == 200
-    data_lst = lst.json()
-    assert any(x["id"] == round_id for x in data_lst)
-    assert data_lst[0]["players_count"] == 1
-
-    # First score should not complete the round.
-    s = client.post(
-        f"/api/v1/rounds/{round_id}/scores",
-        json={"hole_number": 1, "strokes": 5},
-        headers={"X-User-Id": "u1"},
-    )
-    assert s.status_code == 200
-
-    g1 = client.get(f"/api/v1/rounds/{round_id}", headers={"X-User-Id": "u1"})
-    assert g1.status_code == 200
-    assert g1.json()["completed_at"] is None
-
-    # Fill remaining holes; round should auto-complete after the last one.
-    for hn in range(2, 10):
-        resp = client.post(
+    # Owner enters scores for all players on hole 1.
+    for pid, strokes in [("u1", 5), ("u2", 4), ("u3", 6)]:
+        s = client.post(
             f"/api/v1/rounds/{round_id}/scores",
-            json={"hole_number": hn, "strokes": 4},
+            json={"hole_number": 1, "strokes": strokes, "player_id": pid},
             headers={"X-User-Id": "u1"},
         )
-        assert resp.status_code == 200
+        assert s.status_code == 200
 
     g = client.get(f"/api/v1/rounds/{round_id}", headers={"X-User-Id": "u1"})
     assert g.status_code == 200
     data = g.json()
-    assert data["course_name"] == "Test Course"
-    assert data["completed_at"] is not None
-    assert data["total_par"] == 36
-    assert data["total_strokes"] == 5 + 8 * 4
-    assert data["owner_id"] == "u1"
-    assert data["player_ids"] == ["u1"]
-    assert data["total_strokes_by_player"]["u1"] == 5 + 8 * 4
-    assert data["holes"][0] == {"number": 1, "par": 4, "strokes": {"u1": 5}}
+    assert data["holes"][0]["strokes"] == {"u1": 5, "u2": 4, "u3": 6}
+
+
+def test_group_round_non_owner_cannot_enter_scores_for_others(client):
+    course_payload = {
+        "name": "Test Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+    }
+    c = client.post(
+        "/api/v1/courses", json=course_payload, headers={"X-User-Id": "u1"}
+    ).json()
+
+    r = client.post(
+        "/api/v1/rounds",
+        json={"course_id": c["id"], "player_ids": ["u2"]},
+        headers={"X-User-Id": "u1"},
+    )
+    assert r.status_code == 201
+    round_id = r.json()["id"]
+
+    resp = client.post(
+        f"/api/v1/rounds/{round_id}/scores",
+        json={"hole_number": 1, "strokes": 4, "player_id": "u1"},
+        headers={"X-User-Id": "u2"},
+    )
+    assert resp.status_code == 403

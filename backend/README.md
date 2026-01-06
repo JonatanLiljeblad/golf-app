@@ -15,6 +15,15 @@ cp .env.example .env  # optional
 uv run uvicorn app.main:app --reload
 ```
 
+### Migrations
+
+If you change models (or pull a change that adds/updates tables), run:
+
+```bash
+cd backend
+uv run alembic upgrade head
+```
+
 ### Tests
 
 ```bash
