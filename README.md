@@ -76,4 +76,7 @@ npm run build
 
 Notes:
 - The frontend requires `VITE_AUTH0_DOMAIN` + `VITE_AUTH0_CLIENT_ID` to be set (see `frontend/.env.example`).
+- In the Auth0 Dashboard (Application settings), set:
+  - Allowed Callback URLs: `http://localhost:5173,http://127.0.0.1:5173`
+  - Allowed Web Origins: `http://localhost:5173,http://127.0.0.1:5173`
 - If you set `VITE_AUTH0_AUDIENCE`, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
