@@ -69,7 +69,8 @@ export default function StartRound() {
       setRound(created);
     } catch (e) {
       const err = e as ApiError;
-      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      const detail = err.body && typeof err.body === "object" && "detail" in err.body ? (err.body as { detail?: unknown }).detail : null;
+      const msg = detail != null ? String(detail) : null;
       setError(msg ? `${msg} (${err.status}).` : `Failed to start round (${err.status}).`);
     } finally {
       setLoading(null);

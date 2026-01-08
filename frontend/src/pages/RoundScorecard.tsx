@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
 import type { Round } from "../api/types";
@@ -8,6 +8,7 @@ type ApiError = { status: number; body: unknown };
 
 export default function RoundScorecard() {
   const { roundId } = useParams();
+  const navigate = useNavigate();
   const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { request } = useApi();
 
@@ -65,7 +66,8 @@ export default function RoundScorecard() {
       await load(round.id);
     } catch (e) {
       const err = e as ApiError;
-      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      const detail = err.body && typeof err.body === "object" && "detail" in err.body ? (err.body as { detail?: unknown }).detail : null;
+      const msg = detail != null ? String(detail) : null;
       setError(msg ? `${msg} (${err.status}).` : `Failed to add player (${err.status}).`);
     }
   }
@@ -75,10 +77,11 @@ export default function RoundScorecard() {
     setError(null);
     try {
       await request(`/api/v1/rounds/${round.id}`, { method: "DELETE" });
-      window.location.href = "/rounds";
+      navigate("/rounds", { replace: true });
     } catch (e) {
       const err = e as ApiError;
-      const msg = typeof err.body === "object" && err.body && "detail" in (err.body as any) ? String((err.body as any).detail) : null;
+      const detail = err.body && typeof err.body === "object" && "detail" in err.body ? (err.body as { detail?: unknown }).detail : null;
+      const msg = detail != null ? String(detail) : null;
       setError(msg ? `${msg} (${err.status}).` : `Failed to delete round (${err.status}).`);
     }
   }
