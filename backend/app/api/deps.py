@@ -9,6 +9,7 @@ from fastapi import Header, HTTPException
 from jose import jwt
 from jose.exceptions import JWTError
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.settings import settings
@@ -30,10 +31,16 @@ def ensure_player(db: Session, external_id: str) -> Player:
     if player:
         return player
 
+    # Multiple concurrent requests (e.g. React StrictMode) can race to create the same player.
     player = Player(external_id=external_id)
     db.add(player)
-    db.flush()
-    return player
+    try:
+        db.flush()
+        return player
+    except IntegrityError:
+        db.rollback()
+        player = db.execute(select(Player).where(Player.external_id == external_id)).scalars().one()
+        return player
 
 
 _JWKS_CACHE: dict | None = None
