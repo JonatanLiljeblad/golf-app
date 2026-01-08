@@ -145,7 +145,7 @@ export default function RoundScorecard() {
                 {isOwner && !round.completed_at && (
                   <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
                     <input
-                      placeholder="Invite player (Auth0 sub)"
+                      placeholder="Invite player (email or username)"
                       value={inviteId}
                       onChange={(e) => setInviteId(e.target.value)}
                       style={{ width: 260 }}
@@ -175,11 +175,18 @@ export default function RoundScorecard() {
               >
                 <div className="auth-mono">Hole</div>
                 <div className="auth-mono">Par</div>
-                {round.player_ids.map((pid) => (
-                  <div key={pid} className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {pid === viewerId ? "You" : pid}
-                  </div>
-                ))}
+                {round.player_ids.map((pid) => {
+                  const meta = round.players?.find((p) => p.external_id === pid);
+                  const label =
+                    pid === viewerId
+                      ? "You"
+                      : meta?.username ?? meta?.name ?? meta?.email ?? pid;
+                  return (
+                    <div key={pid} className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {label}
+                    </div>
+                  );
+                })}
 
                 {round.holes.map((h) => (
                   <div key={h.number} style={{ display: "contents" }}>

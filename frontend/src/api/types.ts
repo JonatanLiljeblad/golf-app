@@ -12,12 +12,22 @@ export type RoundHole = {
   strokes: Record<string, number | null>;
 };
 
+export type Player = {
+  id: number;
+  external_id: string;
+  email: string | null;
+  username: string | null;
+  name: string | null;
+  handicap: number | null;
+};
+
 export type Round = {
   id: number;
   course_id: number;
   course_name: string;
   owner_id: string;
   player_ids: string[];
+  players?: Player[];
   started_at: string;
   completed_at: string | null;
   holes: RoundHole[];

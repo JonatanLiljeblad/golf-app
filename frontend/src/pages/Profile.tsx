@@ -1,4 +1,23 @@
+import { useEffect, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
+import { useApi } from "../api/useApi";
+import type { Player } from "../api/types";
+
+type ApiError = { status: number; body: unknown };
+
+function formatHandicapForInput(h: number | null): string {
+  if (h == null) return "";
+  // Stored as numeric where plus handicaps are negative (e.g. -0.1 => "+0.1").
+  return h < 0 ? `+${Math.abs(h)}` : String(h);
+}
+
+function parseHandicapFromInput(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const v = Number(s.replace("+", ""));
+  if (!Number.isFinite(v)) return null;
+  return s.startsWith("+") ? -Math.abs(v) : v;
+}
 
 export default function Profile() {
   const {
@@ -9,6 +28,103 @@ export default function Profile() {
     logout,
     user,
   } = useAuth0();
+  const { request } = useApi();
+
+  const [me, setMe] = useState<Player | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
+
+  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
+  const [name, setName] = useState("");
+  const [handicap, setHandicap] = useState<string>("");
+
+  const [friendEmail, setFriendEmail] = useState("");
+  const [friendUsername, setFriendUsername] = useState("");
+  const [friendName, setFriendName] = useState("");
+  const [friendHandicap, setFriendHandicap] = useState<string>("");
+
+  async function loadMe() {
+    setApiError(null);
+    setMsg(null);
+    try {
+      const data = await request<Player>("/api/v1/players/me");
+      setMe(data);
+      setEmail(data.email ?? "");
+      setUsername(data.username ?? "");
+      setName(data.name ?? "");
+      setHandicap(formatHandicapForInput(data.handicap));
+    } catch (e) {
+      const err = e as ApiError;
+      setApiError(`Failed to load profile (${err.status}).`);
+    }
+  }
+
+  async function saveMe() {
+    setApiError(null);
+    setMsg(null);
+    setSaving(true);
+    try {
+      const h = parseHandicapFromInput(handicap);
+      const updated = await request<Player>("/api/v1/players/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          email: email.trim() || null,
+          username: username.trim() || null,
+          name: name.trim() || null,
+          handicap: h,
+        }),
+      });
+      setMe(updated);
+      setMsg("Saved.");
+    } catch (e) {
+      const err = e as ApiError;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
+      const m = detail != null ? String(detail) : null;
+      setApiError(m ? `${m} (${err.status}).` : `Failed to save (${err.status}).`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createFriend() {
+    setApiError(null);
+    setMsg(null);
+    try {
+      const h = parseHandicapFromInput(friendHandicap);
+      const created = await request<Player>("/api/v1/players", {
+        method: "POST",
+        body: JSON.stringify({
+          email: friendEmail.trim(),
+          username: friendUsername.trim() || null,
+          name: friendName.trim() || null,
+          handicap: h,
+        }),
+      });
+      setFriendEmail("");
+      setFriendUsername("");
+      setFriendName("");
+      setFriendHandicap("");
+      setMsg(`Created player: ${created.username ?? created.email}`);
+    } catch (e) {
+      const err = e as ApiError;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
+      const m = detail != null ? String(detail) : null;
+      setApiError(m ? `${m} (${err.status}).` : `Failed to create (${err.status}).`);
+    }
+  }
+
+  useEffect(() => {
+    if (isAuthenticated) void loadMe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated]);
 
   if (isLoading) return <div className="auth-card">Loading…</div>;
 
@@ -22,34 +138,112 @@ export default function Profile() {
   }
 
   return (
-    <div className="auth-card">
-      <h1 className="auth-title">Profile</h1>
-      <p className="auth-subtitle">
-        Sign in with Auth0 to unlock your courses and rounds.
-      </p>
+    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
+      {apiError && (
+        <div className="auth-card">
+          <div className="auth-mono">{apiError}</div>
+        </div>
+      )}
+      {msg && (
+        <div className="auth-card">
+          <div className="auth-mono">{msg}</div>
+        </div>
+      )}
 
-      <div className="auth-row">
-        {!isAuthenticated ? (
-          <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
-            Log in
-          </button>
-        ) : (
-          <button
-            className="auth-btn secondary"
-            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-          >
-            Log out
-          </button>
+      <div className="auth-card">
+        <h1 className="auth-title">Profile</h1>
+        <p className="auth-subtitle">Set your username/email so others can add you to a round.</p>
+
+        <div className="auth-row">
+          {!isAuthenticated ? (
+            <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+              Log in
+            </button>
+          ) : (
+            <button
+              className="auth-btn secondary"
+              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+            >
+              Log out
+            </button>
+          )}
+        </div>
+
+        {isAuthenticated && user && (
+          <div className="auth-user">
+            <img className="auth-avatar" src={user.picture} alt={user.name ?? "User"} />
+            <div>
+              <div style={{ fontWeight: 800 }}>{user.name}</div>
+              <div className="auth-mono">{user.email}</div>
+              <div className="auth-mono">sub: {user.sub}</div>
+            </div>
+          </div>
+        )}
+
+        {isAuthenticated && me && (
+          <div style={{ display: "grid", gap: ".5rem", marginTop: "1rem" }}>
+            <label style={{ display: "grid", gap: ".25rem" }}>
+              <span style={{ fontWeight: 700 }}>Email</span>
+              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+            </label>
+            <label style={{ display: "grid", gap: ".25rem" }}>
+              <span style={{ fontWeight: 700 }}>Username</span>
+              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="yourname" />
+            </label>
+            <label style={{ display: "grid", gap: ".25rem" }}>
+              <span style={{ fontWeight: 700 }}>Name</span>
+              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+            </label>
+            <label style={{ display: "grid", gap: ".25rem" }}>
+              <span style={{ fontWeight: 700 }}>Handicap</span>
+              <input
+                value={handicap}
+                onChange={(e) => setHandicap(e.target.value)}
+                placeholder="e.g. 12.4 or +0.1"
+              />
+            </label>
+
+            <button className="auth-btn primary" onClick={() => void saveMe()} disabled={saving}>
+              {saving ? "Saving…" : "Save profile"}
+            </button>
+          </div>
         )}
       </div>
 
-      {isAuthenticated && user && (
-        <div className="auth-user">
-          <img className="auth-avatar" src={user.picture} alt={user.name ?? "User"} />
-          <div>
-            <div style={{ fontWeight: 800 }}>{user.name}</div>
-            <div className="auth-mono">{user.email}</div>
-            <div className="auth-mono">sub: {user.sub}</div>
+      {isAuthenticated && (
+        <div className="auth-card">
+          <h2 style={{ margin: 0 }}>Create player profile</h2>
+          <p className="auth-subtitle">Use this for friends who don’t have Auth0 accounts yet.</p>
+
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <input
+              value={friendEmail}
+              onChange={(e) => setFriendEmail(e.target.value)}
+              placeholder="Friend email (required)"
+            />
+            <input
+              value={friendUsername}
+              onChange={(e) => setFriendUsername(e.target.value)}
+              placeholder="Friend username (optional)"
+            />
+            <input
+              value={friendName}
+              onChange={(e) => setFriendName(e.target.value)}
+              placeholder="Friend name (optional)"
+            />
+            <input
+              value={friendHandicap}
+              onChange={(e) => setFriendHandicap(e.target.value)}
+              placeholder="Friend handicap (optional, e.g. +0.1)"
+            />
+
+            <button
+              className="auth-btn secondary"
+              onClick={() => void createFriend()}
+              disabled={!friendEmail.trim()}
+            >
+              Create
+            </button>
           </div>
         </div>
       )}

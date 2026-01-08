@@ -44,6 +44,9 @@ def test_group_round_owner_can_enter_scores_for_all(client):
         "/api/v1/courses", json=course_payload, headers={"X-User-Id": "u1"}
     ).json()
 
+    client.get("/api/v1/players/me", headers={"X-User-Id": "u2"})
+    client.get("/api/v1/players/me", headers={"X-User-Id": "u3"})
+
     r = client.post(
         "/api/v1/rounds",
         json={"course_id": c["id"], "player_ids": ["u2", "u3"]},
@@ -77,6 +80,8 @@ def test_group_round_non_owner_cannot_enter_scores_for_others(client):
     c = client.post(
         "/api/v1/courses", json=course_payload, headers={"X-User-Id": "u1"}
     ).json()
+
+    client.get("/api/v1/players/me", headers={"X-User-Id": "u2"})
 
     r = client.post(
         "/api/v1/rounds",

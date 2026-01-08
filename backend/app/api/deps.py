@@ -62,9 +62,14 @@ def get_current_user_id(
     authorization: str | None = Header(default=None),
     x_user_id: str | None = Header(default=None),
 ) -> str:
-    # Dev fallback until Auth0 is configured.
     auth0_configured = bool(settings.AUTH0_DOMAIN and settings.AUTH0_AUDIENCE)
+
+    if settings.AUTH0_REQUIRED and not auth0_configured:
+        raise HTTPException(status_code=500, detail="Auth0 required but not configured")
+
+    # Dev fallback until Auth0 is configured.
     if not auth0_configured:
+        x_user_id = (x_user_id or "").strip()
         return x_user_id or "dev-user"
 
     # Auth0 is configured: require a real Bearer token.

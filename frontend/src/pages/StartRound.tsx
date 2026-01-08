@@ -159,7 +159,7 @@ export default function StartRound() {
           {otherPlayerIds.map((pid, idx) => (
             <input
               key={idx}
-              placeholder="Other player Auth0 sub (optional)"
+              placeholder="Other player email or username (optional)"
               value={pid}
               onChange={(e) =>
                 setOtherPlayerIds((prev) => {

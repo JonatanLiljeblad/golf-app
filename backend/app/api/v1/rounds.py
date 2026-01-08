@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
 from app.models.course import Course
+from app.models.player import Player
 from app.models.round import HoleScore, Round, RoundParticipant
 
 router = APIRouter()
@@ -43,12 +44,22 @@ class ScorecardHole(BaseModel):
     strokes: dict[str, int | None]
 
 
+class RoundPlayerOut(BaseModel):
+    id: int
+    external_id: str
+    email: str | None
+    username: str | None
+    name: str | None
+    handicap: float | None
+
+
 class RoundOut(BaseModel):
     id: int
     course_id: int
     course_name: str
     owner_id: str
     player_ids: list[str]
+    players: list[RoundPlayerOut]
     started_at: datetime
     completed_at: datetime | None
     holes: list[ScorecardHole]
@@ -66,6 +77,26 @@ class RoundSummaryOut(BaseModel):
     total_par: int
     total_strokes: int | None
     players_count: int
+
+
+def _resolve_player_ref(db: Session, ref: str) -> Player:
+    ref = (ref or "").strip()
+    if not ref:
+        raise HTTPException(status_code=400, detail="Empty player reference")
+
+    p = db.execute(select(Player).where(Player.external_id == ref)).scalars().one_or_none()
+    if p:
+        return p
+
+    if "@" in ref:
+        email = ref.lower()
+        p = db.execute(select(Player).where(Player.email == email)).scalars().one_or_none()
+    else:
+        p = db.execute(select(Player).where(Player.username == ref)).scalars().one_or_none()
+
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found (create profile first)")
+    return p
 
 
 @router.post("/rounds", response_model=RoundOut, status_code=201)
@@ -92,17 +123,21 @@ def create_round(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    player_external_ids = [user_id]
+    players: list[Player] = [owner]
+
     if payload.player_ids:
-        for pid in payload.player_ids:
-            pid = (pid or "").strip()
-            if pid and pid not in player_external_ids:
-                player_external_ids.append(pid)
+        for ref in payload.player_ids:
+            ref = (ref or "").strip()
+            if not ref:
+                continue
+            p = _resolve_player_ref(db, ref)
+            if p.id == owner.id:
+                raise HTTPException(status_code=400, detail="You are already in the round")
+            if p.id not in {x.id for x in players}:
+                players.append(p)
 
-    if len(player_external_ids) > 4:
+    if len(players) > 4:
         raise HTTPException(status_code=400, detail="max 4 players")
-
-    players = [ensure_player(db, pid) for pid in player_external_ids]
 
     rnd = Round(owner_player_id=owner.id, course_id=payload.course_id)
     db.add(rnd)
@@ -134,21 +169,26 @@ def add_round_participants(
     if rnd.completed_at is not None:
         raise HTTPException(status_code=409, detail="Round already completed")
 
-    existing_external_ids = {p.player.external_id for p in rnd.participants}
-    to_add = []
-    for pid in payload.player_ids:
-        pid = (pid or "").strip()
-        if pid and pid not in existing_external_ids:
-            to_add.append(pid)
+    existing_player_ids = {p.player_id for p in rnd.participants}
+
+    to_add: list[Player] = []
+    for ref in payload.player_ids:
+        ref = (ref or "").strip()
+        if not ref:
+            continue
+        p = _resolve_player_ref(db, ref)
+        if p.id in existing_player_ids:
+            raise HTTPException(status_code=409, detail="Player already in round")
+        if p.id not in {x.id for x in to_add}:
+            to_add.append(p)
 
     if not to_add:
-        return {"ok": True}
+        raise HTTPException(status_code=400, detail="No new players to add")
 
-    if len(existing_external_ids) + len(to_add) > 4:
+    if len(existing_player_ids) + len(to_add) > 4:
         raise HTTPException(status_code=400, detail="max 4 players")
 
-    for ext in to_add:
-        p = ensure_player(db, ext)
+    for p in to_add:
         db.add(RoundParticipant(round_id=rnd.id, player_id=p.id))
 
     try:
@@ -387,12 +427,25 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         rnd.course, participant_ids, rnd.scores, rnd.owner.external_id
     )
 
+    players = [
+        RoundPlayerOut(
+            id=p.player.id,
+            external_id=p.player.external_id,
+            email=p.player.email,
+            username=p.player.username,
+            name=p.player.name,
+            handicap=p.player.handicap,
+        )
+        for p in rnd.participants
+    ]
+
     return RoundOut(
         id=rnd.id,
         course_id=rnd.course_id,
         course_name=rnd.course.name,
         owner_id=rnd.owner.external_id,
         player_ids=participant_ids,
+        players=players,
         started_at=rnd.started_at,
         completed_at=rnd.completed_at,
         holes=holes,
