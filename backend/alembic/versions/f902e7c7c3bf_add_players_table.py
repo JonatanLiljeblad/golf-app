@@ -83,47 +83,96 @@ def upgrade() -> None:
         "(SELECT id FROM players WHERE players.external_id = hole_scores.player_id)"
     )
 
-    # Recreate tables to drop old string columns and add FK constraints.
-    with op.batch_alter_table("courses", recreate="always") as batch:
-        batch.drop_index(op.f("ix_courses_user_id"))
-        batch.drop_column("user_id")
-        batch.alter_column("owner_player_id", nullable=False)
-        batch.create_foreign_key(
+    # Drop old string columns and add FK constraints.
+    #
+    # Note: Postgres cannot always use `batch_alter_table(recreate="always")` here because
+    # `courses` is referenced by other tables (e.g. holes/rounds) and dropping the PK
+    # constraint would require CASCADE.
+    if dialect == "postgresql":
+        op.drop_index(op.f("ix_courses_user_id"), table_name="courses")
+        op.drop_column("courses", "user_id")
+        op.alter_column("courses", "owner_player_id", nullable=False)
+        op.create_foreign_key(
             "fk_courses_owner_player_id_players",
+            "courses",
             "players",
             ["owner_player_id"],
             ["id"],
             ondelete="RESTRICT",
         )
-        batch.create_index(op.f("ix_courses_owner_player_id"), ["owner_player_id"], unique=False)
+        op.create_index(op.f("ix_courses_owner_player_id"), "courses", ["owner_player_id"], unique=False)
 
-    with op.batch_alter_table("rounds", recreate="always") as batch:
-        batch.drop_index(op.f("ix_rounds_user_id"))
-        batch.drop_column("user_id")
-        batch.alter_column("owner_player_id", nullable=False)
-        batch.create_foreign_key(
+        op.drop_index(op.f("ix_rounds_user_id"), table_name="rounds")
+        op.drop_column("rounds", "user_id")
+        op.alter_column("rounds", "owner_player_id", nullable=False)
+        op.create_foreign_key(
             "fk_rounds_owner_player_id_players",
+            "rounds",
             "players",
             ["owner_player_id"],
             ["id"],
             ondelete="RESTRICT",
         )
-        batch.create_index(op.f("ix_rounds_owner_player_id"), ["owner_player_id"], unique=False)
+        op.create_index(op.f("ix_rounds_owner_player_id"), "rounds", ["owner_player_id"], unique=False)
 
-    with op.batch_alter_table("round_participants", recreate="always") as batch:
-        batch.drop_index(op.f("ix_round_participants_user_id"))
-        batch.drop_column("user_id")
-        batch.alter_column("player_id", nullable=False)
-        batch.drop_constraint("uq_round_participant", type_="unique")
-        batch.create_unique_constraint("uq_round_participant", ["round_id", "player_id"])
-        batch.create_foreign_key(
+        op.drop_constraint("uq_round_participant", "round_participants", type_="unique")
+        op.drop_index(op.f("ix_round_participants_user_id"), table_name="round_participants")
+        op.drop_column("round_participants", "user_id")
+        op.alter_column("round_participants", "player_id", nullable=False)
+        op.create_unique_constraint("uq_round_participant", "round_participants", ["round_id", "player_id"])
+        op.create_foreign_key(
             "fk_round_participants_player_id_players",
+            "round_participants",
             "players",
             ["player_id"],
             ["id"],
             ondelete="RESTRICT",
         )
-        batch.create_index(op.f("ix_round_participants_player_id"), ["player_id"], unique=False)
+        op.create_index(
+            op.f("ix_round_participants_player_id"), "round_participants", ["player_id"], unique=False
+        )
+    else:
+        # SQLite
+        with op.batch_alter_table("courses", recreate="always") as batch:
+            batch.drop_index(op.f("ix_courses_user_id"))
+            batch.drop_column("user_id")
+            batch.alter_column("owner_player_id", nullable=False)
+            batch.create_foreign_key(
+                "fk_courses_owner_player_id_players",
+                "players",
+                ["owner_player_id"],
+                ["id"],
+                ondelete="RESTRICT",
+            )
+            batch.create_index(op.f("ix_courses_owner_player_id"), ["owner_player_id"], unique=False)
+
+        with op.batch_alter_table("rounds", recreate="always") as batch:
+            batch.drop_index(op.f("ix_rounds_user_id"))
+            batch.drop_column("user_id")
+            batch.alter_column("owner_player_id", nullable=False)
+            batch.create_foreign_key(
+                "fk_rounds_owner_player_id_players",
+                "players",
+                ["owner_player_id"],
+                ["id"],
+                ondelete="RESTRICT",
+            )
+            batch.create_index(op.f("ix_rounds_owner_player_id"), ["owner_player_id"], unique=False)
+
+        with op.batch_alter_table("round_participants", recreate="always") as batch:
+            batch.drop_index(op.f("ix_round_participants_user_id"))
+            batch.drop_column("user_id")
+            batch.alter_column("player_id", nullable=False)
+            batch.drop_constraint("uq_round_participant", type_="unique")
+            batch.create_unique_constraint("uq_round_participant", ["round_id", "player_id"])
+            batch.create_foreign_key(
+                "fk_round_participants_player_id_players",
+                "players",
+                ["player_id"],
+                ["id"],
+                ondelete="RESTRICT",
+            )
+            batch.create_index(op.f("ix_round_participants_player_id"), ["player_id"], unique=False)
 
     if dialect == "postgresql":
         op.drop_constraint("uq_score_round_player_hole", "hole_scores", type_="unique")

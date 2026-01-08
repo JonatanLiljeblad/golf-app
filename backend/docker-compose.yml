@@ -1,0 +1,14 @@
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432" # avoid clashing with a local Postgres on 5432
+    environment:
+      POSTGRES_DB: golfdb
+      POSTGRES_USER: golf
+      POSTGRES_PASSWORD: golf
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:

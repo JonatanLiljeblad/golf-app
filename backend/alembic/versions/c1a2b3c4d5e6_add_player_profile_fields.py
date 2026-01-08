@@ -18,20 +18,42 @@ depends_on = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("players", recreate="always") as batch:
-        batch.add_column(sa.Column("email", sa.String(length=320), nullable=True))
-        batch.add_column(sa.Column("username", sa.String(length=64), nullable=True))
-        batch.add_column(sa.Column("name", sa.String(length=128), nullable=True))
-        batch.add_column(sa.Column("handicap", sa.Float(), nullable=True))
-        batch.create_index(op.f("ix_players_email"), ["email"], unique=True)
-        batch.create_index(op.f("ix_players_username"), ["username"], unique=True)
+    dialect = op.get_bind().dialect.name
+
+    # On Postgres, `recreate="always"` tries to drop the PK constraint, but `players`
+    # is referenced by multiple FKs; use regular ALTERs instead.
+    if dialect == "postgresql":
+        op.add_column("players", sa.Column("email", sa.String(length=320), nullable=True))
+        op.add_column("players", sa.Column("username", sa.String(length=64), nullable=True))
+        op.add_column("players", sa.Column("name", sa.String(length=128), nullable=True))
+        op.add_column("players", sa.Column("handicap", sa.Float(), nullable=True))
+        op.create_index(op.f("ix_players_email"), "players", ["email"], unique=True)
+        op.create_index(op.f("ix_players_username"), "players", ["username"], unique=True)
+    else:
+        with op.batch_alter_table("players", recreate="always") as batch:
+            batch.add_column(sa.Column("email", sa.String(length=320), nullable=True))
+            batch.add_column(sa.Column("username", sa.String(length=64), nullable=True))
+            batch.add_column(sa.Column("name", sa.String(length=128), nullable=True))
+            batch.add_column(sa.Column("handicap", sa.Float(), nullable=True))
+            batch.create_index(op.f("ix_players_email"), ["email"], unique=True)
+            batch.create_index(op.f("ix_players_username"), ["username"], unique=True)
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("players", recreate="always") as batch:
-        batch.drop_index(op.f("ix_players_username"))
-        batch.drop_index(op.f("ix_players_email"))
-        batch.drop_column("handicap")
-        batch.drop_column("name")
-        batch.drop_column("username")
-        batch.drop_column("email")
+    dialect = op.get_bind().dialect.name
+
+    if dialect == "postgresql":
+        op.drop_index(op.f("ix_players_username"), table_name="players")
+        op.drop_index(op.f("ix_players_email"), table_name="players")
+        op.drop_column("players", "handicap")
+        op.drop_column("players", "name")
+        op.drop_column("players", "username")
+        op.drop_column("players", "email")
+    else:
+        with op.batch_alter_table("players", recreate="always") as batch:
+            batch.drop_index(op.f("ix_players_username"))
+            batch.drop_index(op.f("ix_players_email"))
+            batch.drop_column("handicap")
+            batch.drop_column("name")
+            batch.drop_column("username")
+            batch.drop_column("email")

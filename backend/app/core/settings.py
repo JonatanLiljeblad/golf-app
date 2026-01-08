@@ -8,8 +8,9 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Golf App API"
     API_V1_STR: str = "/api/v1"
 
-    # Default is SQLite for local dev; override with DATABASE_URL in .env
-    DATABASE_URL: str = "sqlite:///./golf.db"
+    # Default is Postgres for local dev; override with DATABASE_URL in .env
+    # (docker-compose exposes Postgres on localhost:5433 to avoid clashing with local installs)
+    DATABASE_URL: str = "postgresql://golf:golf@localhost:5433/golfdb"
 
     # Auth0
     AUTH0_DOMAIN: str | None = None  # e.g. "dev-abc123.eu.auth0.com"

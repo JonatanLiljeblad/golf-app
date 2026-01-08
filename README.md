@@ -25,13 +25,16 @@ This repo uses [`uv`](https://github.com/astral-sh/uv) for Python env + dependen
 ```bash
 cd backend
 
+# Start Postgres (recommended; exposed on localhost:5433)
+docker compose up -d
+
 # Create/manage a local venv
 uv venv
 
 # Install deps (kept in requirements files for now)
 uv pip install -r requirements.txt -r requirements-dev.txt
 
-# Optional: copy env config
+# Copy env config (defaults to Postgres on localhost:5433)
 cp .env.example .env
 
 # Run migrations (needed after pulling schema changes)
@@ -48,7 +51,8 @@ uv run pytest
 ```
 
 Notes:
-- `DATABASE_URL` defaults to SQLite (`sqlite:///./golf.db`) and can be overridden in `backend/.env`.
+- For local dev, Postgres is recommended (see `backend/docker-compose.yml`, exposed on `localhost:5433`).
+- You can still use SQLite by setting `DATABASE_URL=sqlite:///./golf.db` in `backend/.env`.
 
 ## Frontend (local dev)
 

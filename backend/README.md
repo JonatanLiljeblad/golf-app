@@ -4,14 +4,51 @@
 
 Prereq: install `uv` (https://github.com/astral-sh/uv).
 
+### Postgres (recommended)
+
+```bash
+cd backend
+
+# Start Postgres
+# (uses localhost:5433 to avoid clashing with local Postgres on 5432)
+docker compose up -d
+
+# Configure env
+cp .env.example .env
+
+uv venv
+uv pip install -r requirements.txt -r requirements-dev.txt
+
+# Apply migrations
+uv run alembic upgrade head
+
+uv run uvicorn app.main:app --reload
+```
+
+Postgres management:
+
+```bash
+cd backend
+
+# Stop Postgres (keep data)
+docker compose down
+
+# Reset Postgres (delete all data)
+docker compose down -v
+```
+
+### SQLite fallback
+
 ```bash
 cd backend
 
 uv venv
 uv pip install -r requirements.txt -r requirements-dev.txt
 
-cp .env.example .env  # optional
+# Optional: keep using local sqlite file
+# cp .env.example .env && sed -i '' 's|^DATABASE_URL=.*|DATABASE_URL=sqlite:///./golf.db|' .env
 
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
