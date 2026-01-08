@@ -14,7 +14,6 @@ const looksPlaceholder =
   domain === "your-tenant.us.auth0.com" || clientId === "your-client-id";
 
 if (!domain || !clientId || looksPlaceholder) {
-  // eslint-disable-next-line no-console
   console.error(
     "Auth0 config missing: set real VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID in frontend/.env (see frontend/.env.example)."
   );

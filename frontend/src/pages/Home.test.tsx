@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import Home from "./Home";
 
-let auth0State: any;
+let auth0State: unknown;
 vi.mock("@auth0/auth0-react", () => ({
   useAuth0: () => auth0State,
 }));
