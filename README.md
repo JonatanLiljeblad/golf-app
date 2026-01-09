@@ -43,7 +43,10 @@ uv run alembic upgrade head
 # Run API
 uv run uvicorn app.main:app --reload
 
-# Smoke test
+# One-shot local smoke (Postgres + migrations)
+../scripts/smoke-local.sh
+
+# Smoke test (API endpoint)
 curl -sS http://127.0.0.1:8000/api/v1/health
 
 # Run tests
