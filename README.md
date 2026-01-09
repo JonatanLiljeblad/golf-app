@@ -55,6 +55,14 @@ uv run pytest
 
 Notes:
 - For local dev, Postgres is recommended (see `backend/docker-compose.yml`, exposed on `localhost:5433`).
+- When you’re done developing, stop the local Postgres container (best practice; frees CPU/RAM):
+
+  ```bash
+  cd backend
+  docker compose down      # stop (keep data)
+  docker compose down -v   # stop + delete all local data
+  ```
+
 - You can still use SQLite by setting `DATABASE_URL=sqlite:///./golf.db` in `backend/.env`.
 
 ## Frontend (local dev)

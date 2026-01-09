@@ -25,7 +25,7 @@ uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-Postgres management:
+Postgres management (recommended to stop it when you’re done):
 
 ```bash
 cd backend
