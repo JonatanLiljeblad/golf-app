@@ -88,4 +88,10 @@ def test_round_flow(client):
     assert data["owner_id"] == "u1"
     assert data["player_ids"] == ["u1"]
     assert data["total_strokes_by_player"]["u1"] == 5 + 8 * 4
-    assert data["holes"][0] == {"number": 1, "par": 4, "strokes": {"u1": 5}}
+    assert data["holes"][0] == {
+        "number": 1,
+        "par": 4,
+        "distance": None,
+        "hcp": None,
+        "strokes": {"u1": 5},
+    }

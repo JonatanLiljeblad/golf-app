@@ -7,7 +7,12 @@ import type { Course } from "../api/types";
 type ApiError = { status: number; body: unknown };
 
 function mkHoles(count: 9 | 18) {
-  return Array.from({ length: count }, (_, i) => ({ number: i + 1, par: 4 }));
+  return Array.from({ length: count }, (_, i) => ({
+    number: i + 1,
+    par: 4,
+    distance: null as number | null,
+    hcp: null as number | null,
+  }));
 }
 
 export default function Courses() {
@@ -142,21 +147,63 @@ export default function Courses() {
               }}
             >
               <div className="auth-mono">Hole {h.number}</div>
-              <input
-                type="number"
-                min={1}
-                max={10}
-                value={h.par}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setHoles((prev) => {
-                    const next = [...prev];
-                    next[idx] = { ...next[idx], par: Number.isFinite(v) && v > 0 ? v : next[idx].par };
-                    return next;
-                  });
-                }}
-                style={{ width: 120 }}
-              />
+              <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={h.par}
+                  onChange={(e) => {
+                    const v = Number(e.target.value);
+                    setHoles((prev) => {
+                      const next = [...prev];
+                      next[idx] = { ...next[idx], par: Number.isFinite(v) && v > 0 ? v : next[idx].par };
+                      return next;
+                    });
+                  }}
+                  style={{ width: 90 }}
+                  aria-label={`Hole ${h.number} par`}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={2000}
+                  value={h.distance ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const v = raw === "" ? null : Number(raw);
+                    setHoles((prev) => {
+                      const next = [...prev];
+                      next[idx] = { ...next[idx], distance: v != null && Number.isFinite(v) && v > 0 ? v : null };
+                      return next;
+                    });
+                  }}
+                  style={{ width: 110 }}
+                  placeholder="Dist"
+                  aria-label={`Hole ${h.number} distance`}
+                />
+                <select
+                  value={h.hcp ?? ""}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const v = raw === "" ? null : Number(raw);
+                    setHoles((prev) => {
+                      const next = [...prev];
+                      next[idx] = { ...next[idx], hcp: v };
+                      return next;
+                    });
+                  }}
+                  style={{ width: 90 }}
+                  aria-label={`Hole ${h.number} handicap`}
+                >
+                  <option value="">HCP</option>
+                  {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           ))}
         </div>

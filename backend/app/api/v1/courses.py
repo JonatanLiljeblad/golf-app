@@ -14,6 +14,8 @@ router = APIRouter()
 class HoleIn(BaseModel):
     number: int = Field(ge=1, le=18)
     par: int = Field(ge=1, le=10)
+    distance: int | None = Field(default=None, ge=1, le=2000)
+    hcp: int | None = Field(default=None, ge=1, le=18)
 
 
 class HoleOut(HoleIn):
@@ -35,6 +37,12 @@ class CourseCreate(BaseModel):
         numbers = [h.number for h in holes]
         if len(set(numbers)) != len(numbers):
             raise ValueError("hole numbers must be unique")
+
+        max_hcp = len(holes)
+        for h in holes:
+            if h.hcp is not None and h.hcp > max_hcp:
+                raise ValueError(f"hcp must be between 1 and {max_hcp}")
+
         return holes
 
 
@@ -55,7 +63,9 @@ def create_course(
 ):
     owner = ensure_player(db, user_id)
     course = Course(owner_player_id=owner.id, name=payload.name)
-    course.holes = [Hole(number=h.number, par=h.par) for h in payload.holes]
+    course.holes = [
+        Hole(number=h.number, par=h.par, distance=h.distance, hcp=h.hcp) for h in payload.holes
+    ]
 
     db.add(course)
     db.commit()

@@ -168,13 +168,16 @@ export default function RoundScorecard() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: `120px 80px repeat(${round.player_ids.length}, 1fr)`,
+                  gridTemplateColumns: `80px 70px 90px 70px repeat(${round.player_ids.length}, 1fr)`,
+
                   gap: ".5rem",
                   alignItems: "center",
                 }}
               >
                 <div className="auth-mono">Hole</div>
                 <div className="auth-mono">Par</div>
+                <div className="auth-mono">Dist</div>
+                <div className="auth-mono">HCP</div>
                 {round.player_ids.map((pid) => {
                   const meta = round.players?.find((p) => p.external_id === pid);
                   const label =
@@ -192,6 +195,8 @@ export default function RoundScorecard() {
                   <div key={h.number} style={{ display: "contents" }}>
                     <div className="auth-mono">{h.number}</div>
                     <div className="auth-mono">{h.par}</div>
+                    <div className="auth-mono">{h.distance ?? "—"}</div>
+                    <div className="auth-mono">{h.hcp ?? "—"}</div>
                     {round.player_ids.map((pid) => {
                       const canEdit = !round.completed_at && (pid === viewerId || isOwner);
                       return (

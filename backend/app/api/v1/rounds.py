@@ -41,6 +41,8 @@ class HoleScoreOut(BaseModel):
 class ScorecardHole(BaseModel):
     number: int
     par: int
+    distance: int | None = None
+    hcp: int | None = None
     strokes: dict[str, int | None]
 
 
@@ -416,6 +418,8 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
             ScorecardHole(
                 number=h.number,
                 par=h.par,
+                distance=h.distance,
+                hcp=h.hcp,
                 strokes={
                     pid: strokes_by_hole.get(h.number, {}).get(pid)
                     for pid in participant_ids

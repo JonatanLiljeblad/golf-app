@@ -16,6 +16,43 @@ a {
   color: inherit;
 }
 
+/* Form controls */
+input,
+select,
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 0.7rem 0.85rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #e6edf3;
+  font: inherit;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(230, 237, 243, 0.5);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: rgba(99, 93, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(99, 93, 255, 0.22);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+input:disabled,
+select:disabled,
+textarea:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  background: rgba(255, 255, 255, 0.02);
+}
+
 .auth-card {
   max-width: 560px;
   margin: 1.5rem auto;

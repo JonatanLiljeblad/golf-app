@@ -1,4 +1,10 @@
-export type Hole = { id: number; number: number; par: number };
+export type Hole = {
+  id: number;
+  number: number;
+  par: number;
+  distance: number | null;
+  hcp: number | null;
+};
 
 export type Course = {
   id: number;
@@ -9,6 +15,8 @@ export type Course = {
 export type RoundHole = {
   number: number;
   par: number;
+  distance: number | null;
+  hcp: number | null;
   strokes: Record<string, number | null>;
 };
 

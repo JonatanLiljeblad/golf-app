@@ -34,5 +34,7 @@ class Hole(Base):
     )
     number: Mapped[int] = mapped_column(Integer, nullable=False)
     par: Mapped[int] = mapped_column(Integer, nullable=False)
+    distance: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    hcp: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     course: Mapped["Course"] = relationship(back_populates="holes")
