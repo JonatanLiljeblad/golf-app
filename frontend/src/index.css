@@ -16,6 +16,47 @@ a {
   color: inherit;
 }
 
+/* Top navigation */
+.top-nav {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(11, 15, 25, 0.55);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+}
+
+.top-nav__links {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.top-nav__links a {
+  text-decoration: none;
+  padding: 0.45rem 0.65rem;
+  border-radius: 10px;
+  color: rgba(230, 237, 243, 0.82);
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.top-nav__links a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.top-nav__links a:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 93, 255, 0.22);
+}
+
 /* Form controls */
 input,
 select,
@@ -29,6 +70,18 @@ textarea {
   color: #e6edf3;
   font: inherit;
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+/* Make native selects match input styling across browsers (esp. Safari) */
+select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: linear-gradient(45deg, transparent 50%, rgba(230, 237, 243, 0.7) 50%),
+    linear-gradient(135deg, rgba(230, 237, 243, 0.7) 50%, transparent 50%);
+  background-position: calc(100% - 1.05rem) 50%, calc(100% - 0.75rem) 50%;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
 }
 
 input::placeholder,

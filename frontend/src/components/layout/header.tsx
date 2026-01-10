@@ -5,16 +5,8 @@ export default function Header() {
   const { isAuthenticated, loginWithRedirect, logout } = useAuth0();
 
   return (
-    <header
-      style={{
-        padding: "1rem",
-        borderBottom: "1px solid rgba(255,255,255,0.08)",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}
-    >
-      <nav style={{ display: "flex", gap: "1rem" }}>
+    <header className="top-nav">
+      <nav className="top-nav__links">
         <Link to="/">Home</Link>
         <Link to="/courses">Courses</Link>
         <Link to="/round/start">Start Round</Link>
