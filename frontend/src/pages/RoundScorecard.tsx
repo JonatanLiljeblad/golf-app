@@ -145,7 +145,7 @@ export default function RoundScorecard() {
                 {isOwner && !round.completed_at && (
                   <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
                     <input
-                      placeholder="Invite player (email or username)"
+                      placeholder="Invite player (email, username, or Auth0 id)"
                       value={inviteId}
                       onChange={(e) => setInviteId(e.target.value)}
                       style={{ width: 260 }}

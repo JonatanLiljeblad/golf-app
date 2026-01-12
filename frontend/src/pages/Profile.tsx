@@ -40,11 +40,6 @@ export default function Profile() {
   const [name, setName] = useState("");
   const [handicap, setHandicap] = useState<string>("");
 
-  const [friendEmail, setFriendEmail] = useState("");
-  const [friendUsername, setFriendUsername] = useState("");
-  const [friendName, setFriendName] = useState("");
-  const [friendHandicap, setFriendHandicap] = useState<string>("");
-
   async function loadMe() {
     setApiError(null);
     setMsg(null);
@@ -88,36 +83,6 @@ export default function Profile() {
       setApiError(m ? `${m} (${err.status}).` : `Failed to save (${err.status}).`);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function createFriend() {
-    setApiError(null);
-    setMsg(null);
-    try {
-      const h = parseHandicapFromInput(friendHandicap);
-      const created = await request<Player>("/api/v1/players", {
-        method: "POST",
-        body: JSON.stringify({
-          email: friendEmail.trim(),
-          username: friendUsername.trim() || null,
-          name: friendName.trim() || null,
-          handicap: h,
-        }),
-      });
-      setFriendEmail("");
-      setFriendUsername("");
-      setFriendName("");
-      setFriendHandicap("");
-      setMsg(`Created player: ${created.username ?? created.email}`);
-    } catch (e) {
-      const err = e as ApiError;
-      const detail =
-        err.body && typeof err.body === "object" && "detail" in err.body
-          ? (err.body as { detail?: unknown }).detail
-          : null;
-      const m = detail != null ? String(detail) : null;
-      setApiError(m ? `${m} (${err.status}).` : `Failed to create (${err.status}).`);
     }
   }
 
@@ -210,43 +175,7 @@ export default function Profile() {
         )}
       </div>
 
-      {isAuthenticated && (
-        <div className="auth-card">
-          <h2 style={{ margin: 0 }}>Create player profile</h2>
-          <p className="auth-subtitle">Use this for friends who don’t have Auth0 accounts yet.</p>
 
-          <div style={{ display: "grid", gap: ".5rem" }}>
-            <input
-              value={friendEmail}
-              onChange={(e) => setFriendEmail(e.target.value)}
-              placeholder="Friend email (required)"
-            />
-            <input
-              value={friendUsername}
-              onChange={(e) => setFriendUsername(e.target.value)}
-              placeholder="Friend username (optional)"
-            />
-            <input
-              value={friendName}
-              onChange={(e) => setFriendName(e.target.value)}
-              placeholder="Friend name (optional)"
-            />
-            <input
-              value={friendHandicap}
-              onChange={(e) => setFriendHandicap(e.target.value)}
-              placeholder="Friend handicap (optional, e.g. +0.1)"
-            />
-
-            <button
-              className="auth-btn secondary"
-              onClick={() => void createFriend()}
-              disabled={!friendEmail.trim()}
-            >
-              Create
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

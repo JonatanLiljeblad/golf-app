@@ -16,6 +16,8 @@ from app.db.base import Base
 import app.models.player  # noqa: F401
 import app.models.course  # noqa: F401
 import app.models.round  # noqa: F401
+import app.models.friend  # noqa: F401
+import app.models.friend_request  # noqa: F401
 
 # this is the Alembic Config object, which provides access to the values within
 # the .ini file in use.

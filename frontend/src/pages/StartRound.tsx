@@ -2,9 +2,23 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
-import type { Course, Round } from "../api/types";
+import type { Course, Player, Round } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
+
+type GuestPlayer = { name: string; handicap: number | null };
+
+function parseHandicapFromInput(raw: string): number | null {
+  const s = raw.trim();
+  if (!s) return null;
+  const v = Number(s.replace("+", ""));
+  if (!Number.isFinite(v)) return null;
+  return s.startsWith("+") ? -Math.abs(v) : v;
+}
+
+function friendLabel(p: Player): string {
+  return p.name || p.username || p.email || p.external_id;
+}
 
 export default function StartRound() {
   const { isAuthenticated, loginWithRedirect, user } = useAuth0();
@@ -15,6 +29,15 @@ export default function StartRound() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [otherPlayerIds, setOtherPlayerIds] = useState<string[]>(["", "", ""]);
+
+  const [friends, setFriends] = useState<Player[]>([]);
+  const [friendFilter, setFriendFilter] = useState("");
+  const [selectedFriend, setSelectedFriend] = useState("");
+
+  const [guestName, setGuestName] = useState("");
+  const [guestHandicap, setGuestHandicap] = useState("");
+  const [guestPlayers, setGuestPlayers] = useState<GuestPlayer[]>([]);
+
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,10 +84,14 @@ export default function StartRound() {
     setError(null);
     setLoading("Starting round…");
     try {
-      const player_ids = otherPlayerIds.map((s) => s.trim()).filter(Boolean);
+      const player_ids = otherPlayerIds
+        .slice(0, maxManualPlayerSlots())
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap }));
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
-        body: JSON.stringify({ course_id: selectedCourseId, player_ids }),
+        body: JSON.stringify({ course_id: selectedCourseId, player_ids, guest_players }),
       });
       setRound(created);
     } catch (e) {
@@ -97,10 +124,66 @@ export default function StartRound() {
     }
   }
 
+  async function loadFriends() {
+    try {
+      const data = await request<Player[]>("/api/v1/friends");
+      setFriends(data);
+    } catch {
+      // ignore
+    }
+  }
+
+  function maxManualPlayerSlots(): number {
+    return Math.max(0, 3 - guestPlayers.length);
+  }
+
+  function selectedPlayersCount(): number {
+    return 1 + otherPlayerIds.slice(0, maxManualPlayerSlots()).filter((x) => x.trim()).length + guestPlayers.length;
+  }
+
+  function addRefToNextSlot(ref: string) {
+    const trimmed = ref.trim();
+    if (!trimmed) return;
+    if (selectedPlayersCount() >= 4) {
+      setError("max 4 players");
+      return;
+    }
+
+    const maxSlots = maxManualPlayerSlots();
+    setOtherPlayerIds((prev) => {
+      const next = [...prev];
+      const idx = next.slice(0, maxSlots).findIndex((x) => !x.trim());
+      if (idx === -1) return prev;
+      next[idx] = trimmed;
+      return next;
+    });
+  }
+
+  function addGuest() {
+    const n = guestName.trim();
+    if (!n) return;
+    if (selectedPlayersCount() >= 4) {
+      setError("max 4 players");
+      return;
+    }
+    setGuestPlayers((prev) => [...prev, { name: n, handicap: parseHandicapFromInput(guestHandicap) }]);
+    setGuestName("");
+    setGuestHandicap("");
+  }
+
   useEffect(() => {
-    if (isAuthenticated) void loadCourses();
+    if (isAuthenticated) {
+      void loadCourses();
+      void loadFriends();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
+
+  useEffect(() => {
+    const maxSlots = maxManualPlayerSlots();
+    setOtherPlayerIds((prev) => prev.map((v, i) => (i < maxSlots ? v : "")));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guestPlayers.length]);
 
   if (!isAuthenticated) {
     return (
@@ -153,23 +236,109 @@ export default function StartRound() {
           </select>
         </label>
 
-        <div style={{ display: "grid", gap: ".5rem" }}>
+        <div style={{ display: "grid", gap: ".75rem" }}>
           <div style={{ fontWeight: 700 }}>Players (up to 4)</div>
           <div className="auth-mono">You: {viewerId || "—"}</div>
-          {otherPlayerIds.map((pid, idx) => (
+
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <div style={{ fontWeight: 700 }}>Add from friends</div>
             <input
-              key={idx}
-              placeholder="Other player email or username (optional)"
-              value={pid}
-              onChange={(e) =>
-                setOtherPlayerIds((prev) => {
-                  const next = [...prev];
-                  next[idx] = e.target.value;
-                  return next;
-                })
-              }
+              value={friendFilter}
+              onChange={(e) => setFriendFilter(e.target.value)}
+              placeholder="Search your friends"
             />
-          ))}
+            <select
+              value={selectedFriend}
+              onChange={(e) => setSelectedFriend(e.target.value)}
+              disabled={!friends.length}
+            >
+              <option value="">Select friend…</option>
+              {friends
+                .filter((f) => {
+                  const q = friendFilter.trim().toLowerCase();
+                  if (!q) return true;
+                  const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
+                  return hay.includes(q);
+                })
+                .map((f) => (
+                  <option key={f.external_id} value={f.external_id}>
+                    {friendLabel(f)}
+                  </option>
+                ))}
+            </select>
+            <button
+              className="auth-btn secondary"
+              onClick={() => {
+                addRefToNextSlot(selectedFriend);
+                setSelectedFriend("");
+              }}
+              disabled={!selectedFriend}
+            >
+              Add friend
+            </button>
+          </div>
+
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <div style={{ fontWeight: 700 }}>Or add by email / username / Auth0 id</div>
+            {otherPlayerIds.map((pid, idx) => (
+              <input
+                key={idx}
+                placeholder={
+                  idx < maxManualPlayerSlots()
+                    ? "Other player email or username (optional)"
+                    : "Slot used by guest player"
+                }
+                value={pid}
+                disabled={idx >= maxManualPlayerSlots()}
+                onChange={(e) =>
+                  setOtherPlayerIds((prev) => {
+                    const next = [...prev];
+                    next[idx] = e.target.value;
+                    return next;
+                  })
+                }
+              />
+            ))}
+          </div>
+
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <div style={{ fontWeight: 700 }}>Guest players (round only)</div>
+            <div className="auth-mono">Guests are only saved for this round.</div>
+            <input
+              value={guestName}
+              onChange={(e) => setGuestName(e.target.value)}
+              placeholder="Guest name (required)"
+            />
+            <input
+              value={guestHandicap}
+              onChange={(e) => setGuestHandicap(e.target.value)}
+              placeholder="Guest handicap (optional, e.g. +0.1)"
+            />
+            <button className="auth-btn secondary" onClick={() => addGuest()} disabled={!guestName.trim()}>
+              Add guest
+            </button>
+
+            {!!guestPlayers.length && (
+              <div style={{ display: "grid", gap: ".5rem" }}>
+                {guestPlayers.map((g, idx) => (
+                  <div key={`${g.name}-${idx}`} className="auth-row" style={{ justifyContent: "space-between" }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{g.name}</div>
+                      <div className="auth-mono">guest</div>
+                    </div>
+                    <button
+                      className="auth-btn secondary"
+                      onClick={() =>
+                        setGuestPlayers((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <button

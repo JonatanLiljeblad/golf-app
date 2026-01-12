@@ -11,6 +11,7 @@ export default function Header() {
         <Link to="/courses">Courses</Link>
         <Link to="/round/start">Start Round</Link>
         <Link to="/rounds">My Rounds</Link>
+        <Link to="/friends">Friends</Link>
         <Link to="/profile">Profile</Link>
       </nav>
 
@@ -19,12 +20,20 @@ export default function Header() {
           Log in
         </button>
       ) : (
-        <button
-          className="auth-btn secondary"
-          onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
-        >
-          Log out
-        </button>
+        <div className="auth-row">
+          <button
+            className="auth-btn secondary"
+            onClick={() => loginWithRedirect({ authorizationParams: { prompt: "login" } })}
+          >
+            Switch account
+          </button>
+          <button
+            className="auth-btn secondary"
+            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+          >
+            Log out
+          </button>
+        </div>
       )}
     </header>
   );

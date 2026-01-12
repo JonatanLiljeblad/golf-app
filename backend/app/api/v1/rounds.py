@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -14,9 +15,15 @@ from app.models.round import HoleScore, Round, RoundParticipant
 router = APIRouter()
 
 
+class GuestPlayerIn(BaseModel):
+    name: str
+    handicap: float | None = None
+
+
 class RoundCreate(BaseModel):
     course_id: int
     player_ids: list[str] | None = None
+    guest_players: list[GuestPlayerIn] | None = None
 
 
 class RoundAddParticipants(BaseModel):
@@ -97,7 +104,10 @@ def _resolve_player_ref(db: Session, ref: str) -> Player:
         p = db.execute(select(Player).where(Player.username == ref)).scalars().one_or_none()
 
     if not p:
-        raise HTTPException(status_code=404, detail="Player not found (create profile first)")
+        raise HTTPException(
+            status_code=404,
+            detail="Player not found. Ask them to set username/email in Profile, or add as a Guest player.",
+        )
     return p
 
 
@@ -138,12 +148,23 @@ def create_round(
             if p.id not in {x.id for x in players}:
                 players.append(p)
 
-    if len(players) > 4:
+    guest_payloads = payload.guest_players or []
+
+    if len(players) + len(guest_payloads) > 4:
         raise HTTPException(status_code=400, detail="max 4 players")
 
     rnd = Round(owner_player_id=owner.id, course_id=payload.course_id)
     db.add(rnd)
     db.flush()
+
+    for gp in guest_payloads:
+        n = (gp.name or "").strip()
+        if not n:
+            raise HTTPException(status_code=400, detail="Guest name required")
+        guest = Player(external_id=f"guest:{uuid4()}", name=n, handicap=gp.handicap)
+        db.add(guest)
+        db.flush()
+        players.append(guest)
 
     for p in players:
         db.add(RoundParticipant(round_id=rnd.id, player_id=p.id))

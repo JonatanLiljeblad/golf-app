@@ -125,18 +125,30 @@ def search_players(
     db: Session = Depends(get_db),
     _user_id: str = Depends(get_current_user_id),
 ):
+    # Allow searching real users by email/username/name, and also allow exact lookup by
+    # Auth0 `sub` (external_id) even if they haven't filled profile fields yet.
     if not q:
         return []
 
-    needle = f"%{q.strip()}%"
+    qv = q.strip()
+    needle = f"%{qv}%"
+
     rows = db.execute(
         select(Player)
         .where(
+            Player.external_id.notlike("guest:%"),
+            Player.external_id.notlike("profile:%"),
             or_(
-                Player.email.ilike(needle),
-                Player.username.ilike(needle),
-                Player.name.ilike(needle),
-            )
+                Player.external_id == qv,
+                (
+                    or_(Player.email.isnot(None), Player.username.isnot(None), Player.name.isnot(None))
+                    & or_(
+                        Player.email.ilike(needle),
+                        Player.username.ilike(needle),
+                        Player.name.ilike(needle),
+                    )
+                ),
+            ),
         )
         .order_by(Player.id.desc())
         .limit(20)
