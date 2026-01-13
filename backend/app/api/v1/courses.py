@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select
@@ -83,11 +85,10 @@ def list_courses(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    owner = ensure_player(db, user_id)
     stmt = (
         select(Course)
         .options(joinedload(Course.holes))
-        .where(Course.owner_player_id == owner.id)
+        .where(Course.archived_at.is_(None))
         .order_by(Course.id)
     )
     return db.execute(stmt).scalars().unique().all()
@@ -99,11 +100,10 @@ def get_course(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    owner = ensure_player(db, user_id)
     stmt = (
         select(Course)
         .options(joinedload(Course.holes))
-        .where(Course.id == course_id, Course.owner_player_id == owner.id)
+        .where(Course.id == course_id, Course.archived_at.is_(None))
     )
     course = db.execute(stmt).scalars().unique().one_or_none()
     if not course:
@@ -118,20 +118,25 @@ def delete_course(
     user_id: str = Depends(get_current_user_id),
 ):
     owner = ensure_player(db, user_id)
+
     course = db.execute(
-        select(Course).where(Course.id == course_id, Course.owner_player_id == owner.id)
+        select(Course).where(Course.id == course_id, Course.archived_at.is_(None))
     ).scalars().one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
+    if course.owner_player_id != owner.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
 
-    in_use = db.execute(
-        select(Round.id).where(Round.course_id == course_id, Round.owner_player_id == owner.id).limit(1)
+    active = db.execute(
+        select(Round.id)
+        .where(Round.course_id == course_id, Round.completed_at.is_(None))
+        .limit(1)
     ).first()
-    if in_use:
-        raise HTTPException(status_code=409, detail="Course is in use")
+    if active:
+        raise HTTPException(status_code=409, detail="Course has active rounds")
 
+    course.archived_at = datetime.now(timezone.utc)
     try:
-        db.delete(course)
         db.commit()
     except IntegrityError:
         db.rollback()

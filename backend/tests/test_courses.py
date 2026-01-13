@@ -8,6 +8,7 @@ from app.api.deps import get_db
 from app.db.base import Base
 import app.models.player  # noqa: F401
 import app.models.course  # noqa: F401
+import app.models.round  # noqa: F401
 from app.main import app
 
 
@@ -52,8 +53,60 @@ def test_create_and_list_courses(client):
     assert len(courses) == 1
     assert courses[0]["name"] == "My Course"
 
+    # Courses are global/readable by any user.
+    resp_other = client.get("/api/v1/courses", headers={"X-User-Id": "u2"})
+    assert resp_other.status_code == 200
+    assert len(resp_other.json()) == 1
+
+    get_other = client.get(f"/api/v1/courses/{data['id']}", headers={"X-User-Id": "u2"})
+    assert get_other.status_code == 200
+
+    # But only the creator can delete (archive).
+    d_forbidden = client.delete(f"/api/v1/courses/{data['id']}", headers={"X-User-Id": "u2"})
+    assert d_forbidden.status_code == 403
+
     d = client.delete(f"/api/v1/courses/{data['id']}", headers={"X-User-Id": "u1"})
     assert d.status_code == 200
+
+    resp3 = client.get("/api/v1/courses", headers={"X-User-Id": "u1"})
+    assert resp3.status_code == 200
+    assert resp3.json() == []
+
+
+def test_cannot_archive_course_with_active_rounds(client):
+    payload = {
+        "name": "Shared Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+    }
+
+    resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
+    assert resp.status_code == 201
+    course = resp.json()
+
+    # Another user starts a round on the same course.
+    r = client.post(
+        "/api/v1/rounds",
+        json={"course_id": course["id"]},
+        headers={"X-User-Id": "u2"},
+    )
+    assert r.status_code == 201
+    round_id = r.json()["id"]
+
+    # Creator cannot archive while there are active rounds.
+    d_blocked = client.delete(f"/api/v1/courses/{course['id']}", headers={"X-User-Id": "u1"})
+    assert d_blocked.status_code == 409
+
+    # Finish the round (auto-completes once all holes have scores).
+    for hole in range(1, 10):
+        s = client.post(
+            f"/api/v1/rounds/{round_id}/scores",
+            json={"hole_number": hole, "strokes": 4},
+            headers={"X-User-Id": "u2"},
+        )
+        assert s.status_code == 200
+
+    d_ok = client.delete(f"/api/v1/courses/{course['id']}", headers={"X-User-Id": "u1"})
+    assert d_ok.status_code == 200
 
     resp3 = client.get("/api/v1/courses", headers={"X-User-Id": "u1"})
     assert resp3.status_code == 200

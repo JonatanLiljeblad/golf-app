@@ -130,7 +130,7 @@ def create_round(
     course = db.execute(
         select(Course)
         .options(joinedload(Course.holes))
-        .where(Course.id == payload.course_id, Course.owner_player_id == owner.id)
+        .where(Course.id == payload.course_id, Course.archived_at.is_(None))
     ).scalars().unique().one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")

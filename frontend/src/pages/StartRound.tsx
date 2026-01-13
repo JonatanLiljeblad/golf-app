@@ -29,6 +29,7 @@ export default function StartRound() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
   const [otherPlayerIds, setOtherPlayerIds] = useState<string[]>(["", "", ""]);
+  const [friendPlayerIds, setFriendPlayerIds] = useState<string[]>([]);
 
   const [friends, setFriends] = useState<Player[]>([]);
   const [friendFilter, setFriendFilter] = useState("");
@@ -84,10 +85,12 @@ export default function StartRound() {
     setError(null);
     setLoading("Starting round…");
     try {
-      const player_ids = otherPlayerIds
+      const manual_ids = otherPlayerIds
         .slice(0, maxManualPlayerSlots())
         .map((s) => s.trim())
         .filter(Boolean);
+
+      const player_ids = Array.from(new Set([...friendPlayerIds, ...manual_ids]));
       const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap }));
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
@@ -134,29 +137,32 @@ export default function StartRound() {
   }
 
   function maxManualPlayerSlots(): number {
-    return Math.max(0, 3 - guestPlayers.length);
+    return Math.max(0, 3 - guestPlayers.length - friendPlayerIds.length);
   }
 
   function selectedPlayersCount(): number {
-    return 1 + otherPlayerIds.slice(0, maxManualPlayerSlots()).filter((x) => x.trim()).length + guestPlayers.length;
+    const manualCount = otherPlayerIds.slice(0, maxManualPlayerSlots()).filter((x) => x.trim()).length;
+    return 1 + friendPlayerIds.length + manualCount + guestPlayers.length;
   }
 
-  function addRefToNextSlot(ref: string) {
+  function addFriendToRound(ref: string) {
     const trimmed = ref.trim();
     if (!trimmed) return;
+
+    if (trimmed === viewerId) {
+      setError("You are already in the round");
+      return;
+    }
+    if (friendPlayerIds.includes(trimmed) || otherPlayerIds.some((x) => x.trim() === trimmed)) {
+      setError("Player already added");
+      return;
+    }
     if (selectedPlayersCount() >= 4) {
       setError("max 4 players");
       return;
     }
 
-    const maxSlots = maxManualPlayerSlots();
-    setOtherPlayerIds((prev) => {
-      const next = [...prev];
-      const idx = next.slice(0, maxSlots).findIndex((x) => !x.trim());
-      if (idx === -1) return prev;
-      next[idx] = trimmed;
-      return next;
-    });
+    setFriendPlayerIds((prev) => [...prev, trimmed]);
   }
 
   function addGuest() {
@@ -183,7 +189,7 @@ export default function StartRound() {
     const maxSlots = maxManualPlayerSlots();
     setOtherPlayerIds((prev) => prev.map((v, i) => (i < maxSlots ? v : "")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [guestPlayers.length]);
+  }, [guestPlayers.length, friendPlayerIds.length]);
 
   if (!isAuthenticated) {
     return (
@@ -255,6 +261,9 @@ export default function StartRound() {
               <option value="">Select friend…</option>
               {friends
                 .filter((f) => {
+                  if (f.external_id === viewerId) return false;
+                  if (friendPlayerIds.includes(f.external_id)) return false;
+
                   const q = friendFilter.trim().toLowerCase();
                   if (!q) return true;
                   const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
@@ -269,13 +278,35 @@ export default function StartRound() {
             <button
               className="auth-btn secondary"
               onClick={() => {
-                addRefToNextSlot(selectedFriend);
+                addFriendToRound(selectedFriend);
                 setSelectedFriend("");
               }}
               disabled={!selectedFriend}
             >
               Add friend
             </button>
+
+            {!!friendPlayerIds.length && (
+              <div style={{ display: "grid", gap: ".5rem" }}>
+                {friendPlayerIds.map((id) => {
+                  const p = friends.find((f) => f.external_id === id);
+                  return (
+                    <div key={id} className="auth-row" style={{ justifyContent: "space-between" }}>
+                      <div>
+                        <div style={{ fontWeight: 700 }}>{p ? friendLabel(p) : id}</div>
+                        <div className="auth-mono">friend</div>
+                      </div>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => setFriendPlayerIds((prev) => prev.filter((x) => x !== id))}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <div style={{ display: "grid", gap: ".5rem" }}>
@@ -286,7 +317,7 @@ export default function StartRound() {
                 placeholder={
                   idx < maxManualPlayerSlots()
                     ? "Other player email or username (optional)"
-                    : "Slot used by guest player"
+                    : "Slot used by friend/guest player"
                 }
                 value={pid}
                 disabled={idx >= maxManualPlayerSlots()}
