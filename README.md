@@ -1,26 +1,23 @@
-# Golf App 🏌️‍♂️
+# Golf App
 
-A web-based golf score tracking application designed to make starting and tracking rounds fast and simple.
+A web-based golf score tracking application focused on making it quick to start a round and record scores hole-by-hole.
 
-## Tech Stack
+## Tech stack
 - Frontend: React + TypeScript
 - Backend: FastAPI + PostgreSQL
 - CI/CD: GitHub Actions
 
-## MVP Features
-- Create and play golf rounds (9/18 holes)
+## Features (MVP)
+- Create and play rounds (9/18 holes)
 - Add custom courses
-- Track scores hole-by-hole
-- View scorecards after rounds
+- Track scores per hole
+- View scorecards after a round
 
-## Roadmap
-- Advanced statistics (putts, GIR, FIR)
-- Mobile app (React Native)
-- Handicap-adjusted scoring
+## Local development
 
-## Backend (local dev)
+### Backend
 
-This repo uses [`uv`](https://github.com/astral-sh/uv) for Python env + dependency management.
+This repo uses [`uv`](https://github.com/astral-sh/uv) for Python environment and dependency management.
 
 ```bash
 cd backend
@@ -37,7 +34,7 @@ uv pip install -r requirements.txt -r requirements-dev.txt
 # Copy env config (defaults to Postgres on localhost:5433)
 cp .env.example .env
 
-# Run migrations (needed after pulling schema changes)
+# Run migrations
 uv run alembic upgrade head
 
 # Run API
@@ -46,7 +43,7 @@ uv run uvicorn app.main:app --reload
 # One-shot local smoke (Postgres + migrations)
 ../scripts/smoke-local.sh
 
-# Smoke test (API endpoint)
+# Smoke test
 curl -sS http://127.0.0.1:8000/api/v1/health
 
 # Run tests
@@ -54,8 +51,8 @@ uv run pytest
 ```
 
 Notes:
-- For local dev, Postgres is recommended (see `backend/docker-compose.yml`, exposed on `localhost:5433`).
-- When you’re done developing, stop the local Postgres container (best practice; frees CPU/RAM):
+- Postgres is recommended for local development (see `backend/docker-compose.yml`, exposed on `localhost:5433`).
+- When finished, stop the local Postgres container:
 
   ```bash
   cd backend
@@ -63,9 +60,9 @@ Notes:
   docker compose down -v   # stop + delete all local data
   ```
 
-- You can still use SQLite by setting `DATABASE_URL=sqlite:///./golf.db` in `backend/.env`.
+- SQLite can be used by setting `DATABASE_URL=sqlite:///./golf.db` in `backend/.env`.
 
-## Frontend (local dev)
+### Frontend
 
 ```bash
 cd frontend
@@ -86,8 +83,17 @@ npm run build
 ```
 
 Notes:
-- The frontend requires `VITE_AUTH0_DOMAIN` + `VITE_AUTH0_CLIENT_ID` to be set (see `frontend/.env.example`).
-- In the Auth0 Dashboard (Application settings), set:
+- The frontend requires `VITE_AUTH0_DOMAIN` and `VITE_AUTH0_CLIENT_ID` (see `frontend/.env.example`).
+- In the Auth0 Dashboard (Application settings), configure:
   - Allowed Callback URLs: `http://localhost:5173,http://127.0.0.1:5173`
   - Allowed Web Origins: `http://localhost:5173,http://127.0.0.1:5173`
-- If you set `VITE_AUTH0_AUDIENCE`, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
+- If `VITE_AUTH0_AUDIENCE` is set, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
+
+## Roadmap
+- Advanced statistics (putts, GIR, FIR)
+- Mobile app (React Native)
+- Handicap-adjusted scoring
+
+## License
+
+This project is not open source. See [`LICENSE`](./LICENSE).
