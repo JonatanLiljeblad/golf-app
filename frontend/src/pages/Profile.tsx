@@ -95,7 +95,7 @@ export default function Profile() {
 
   if (error) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">Auth Error</h1>
         <div className="auth-mono">{error.message}</div>
       </div>
@@ -103,7 +103,7 @@ export default function Profile() {
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
+    <div className="page content-narrow">
       {apiError && (
         <div className="auth-card">
           <div className="auth-mono">{apiError}</div>

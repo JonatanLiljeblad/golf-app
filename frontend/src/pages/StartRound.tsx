@@ -193,7 +193,7 @@ export default function StartRound() {
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">Start New Round</h1>
         <p className="auth-subtitle">Log in to create rounds and post scores.</p>
         <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
@@ -204,8 +204,8 @@ export default function StartRound() {
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
-      <h1>Start New Round</h1>
+    <div className="page content-narrow">
+      <h1 style={{ margin: 0 }}>Start New Round</h1>
 
       {error && (
         <div className="auth-card">

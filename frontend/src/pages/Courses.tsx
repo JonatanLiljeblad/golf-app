@@ -90,7 +90,7 @@ export default function Courses() {
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">Courses</h1>
         <p className="auth-subtitle">Log in to create and manage your courses.</p>
         <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
@@ -101,8 +101,8 @@ export default function Courses() {
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+    <div className="page content-narrow">
+      <div className="page-header">
         <h1 style={{ margin: 0 }}>Courses</h1>
         <button className="auth-btn secondary" onClick={() => void load()}>
           Refresh

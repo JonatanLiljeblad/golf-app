@@ -7,7 +7,7 @@ export default function Home() {
   const who = user?.name || user?.email || user?.nickname || user?.sub;
 
   return (
-    <div className="auth-card" style={{ maxWidth: 720 }}>
+    <div className="auth-card panel content-narrow">
       <h1 className="auth-title">Golf App</h1>
       <p className="auth-subtitle">Track courses, start rounds, and fill in scorecards as you play.</p>
 

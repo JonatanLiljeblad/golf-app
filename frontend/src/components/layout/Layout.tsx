@@ -5,8 +5,10 @@ export default function Layout() {
   return (
     <>
       <Header />
-      <main style={{ padding: "1rem" }}>
-        <Outlet />
+      <main className="app-main">
+        <div className="container">
+          <Outlet />
+        </div>
       </main>
     </>
   );

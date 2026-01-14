@@ -99,7 +99,7 @@ export default function RoundScorecard() {
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">Round</h1>
         <p className="auth-subtitle">Log in to view your scorecard.</p>
         <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
@@ -112,7 +112,7 @@ export default function RoundScorecard() {
   if (loading && !round) return <div className="auth-card">Loading…</div>;
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
+    <div className="page">
       {error && (
         <div className="auth-card">
           <div className="auth-mono">{error}</div>

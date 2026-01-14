@@ -141,7 +141,7 @@ export default function Friends() {
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">Friends</h1>
         <p className="auth-subtitle">Log in to find and add friends.</p>
         <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
@@ -152,7 +152,7 @@ export default function Friends() {
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
+    <div className="page content-narrow">
       {error && (
         <div className="auth-card">
           <div className="auth-mono">{error}</div>

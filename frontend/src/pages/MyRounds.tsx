@@ -43,7 +43,7 @@ export default function MyRounds() {
 
   if (!isAuthenticated) {
     return (
-      <div className="auth-card">
+      <div className="auth-card content-narrow">
         <h1 className="auth-title">My Rounds</h1>
         <p className="auth-subtitle">Log in to view your rounds.</p>
         <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
@@ -54,8 +54,8 @@ export default function MyRounds() {
   }
 
   return (
-    <div style={{ display: "grid", gap: "1rem", maxWidth: 720 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+    <div className="page content-narrow">
+      <div className="page-header">
         <h1 style={{ margin: 0 }}>My Rounds</h1>
         <button className="auth-btn secondary" onClick={() => void load()}>
           Refresh
