@@ -17,6 +17,9 @@ class Round(Base):
     course_id: Mapped[int] = mapped_column(
         ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    tournament_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournaments.id", ondelete="SET NULL"), index=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

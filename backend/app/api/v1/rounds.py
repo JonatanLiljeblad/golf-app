@@ -66,6 +66,7 @@ class RoundOut(BaseModel):
     id: int
     course_id: int
     course_name: str
+    tournament_id: int | None
     owner_id: str
     player_ids: list[str]
     players: list[RoundPlayerOut]
@@ -81,6 +82,7 @@ class RoundSummaryOut(BaseModel):
     id: int
     course_id: int
     course_name: str
+    tournament_id: int | None
     started_at: datetime
     completed_at: datetime | None
     total_par: int
@@ -386,6 +388,7 @@ def _round_to_summary(rnd: Round) -> RoundSummaryOut:
             id=rnd.id,
             course_id=rnd.course_id,
             course_name="(deleted course)",
+            tournament_id=rnd.tournament_id,
             started_at=rnd.started_at,
             completed_at=rnd.completed_at,
             total_par=0,
@@ -400,6 +403,7 @@ def _round_to_summary(rnd: Round) -> RoundSummaryOut:
         id=rnd.id,
         course_id=rnd.course_id,
         course_name=rnd.course.name,
+        tournament_id=rnd.tournament_id,
         started_at=rnd.started_at,
         completed_at=rnd.completed_at,
         total_par=total_par,
@@ -468,6 +472,7 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         id=rnd.id,
         course_id=rnd.course_id,
         course_name=rnd.course.name,
+        tournament_id=rnd.tournament_id,
         owner_id=rnd.owner.external_id,
         player_ids=participant_ids,
         players=players,

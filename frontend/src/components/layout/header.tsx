@@ -11,6 +11,7 @@ export default function Header() {
         <Link to="/courses">Courses</Link>
         <Link to="/round/start">Start Round</Link>
         <Link to="/rounds">My Rounds</Link>
+        <Link to="/tournaments">Tournaments</Link>
         <Link to="/friends">Friends</Link>
         <Link to="/profile">Profile</Link>
       </nav>

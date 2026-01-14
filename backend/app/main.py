@@ -6,6 +6,7 @@ from app.api.v1.friends import router as friends_router
 from app.api.v1.health import router as health_router
 from app.api.v1.players import router as players_router
 from app.api.v1.rounds import router as rounds_router
+from app.api.v1.tournaments import router as tournaments_router
 from app.core.settings import settings
 
 app = FastAPI(title=settings.PROJECT_NAME)
@@ -38,6 +39,11 @@ app.include_router(
     rounds_router,
     prefix=settings.API_V1_STR,
     tags=["Rounds"],
+)
+app.include_router(
+    tournaments_router,
+    prefix=settings.API_V1_STR,
+    tags=["Tournaments"],
 )
 app.include_router(
     friends_router,
