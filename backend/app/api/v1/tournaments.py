@@ -4,6 +4,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import Select, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
@@ -11,6 +12,8 @@ from app.models.course import Course
 from app.models.player import Player
 from app.models.round import HoleScore, Round, RoundParticipant
 from app.models.tournament import Tournament
+from app.models.tournament_invite import TournamentInvite
+from app.models.tournament_member import TournamentMember
 
 router = APIRouter()
 
@@ -20,27 +23,39 @@ def _player_label(p: Player) -> str:
 
 
 def _tournament_access_clause(player_id: int) -> Select:
-    # A user can access a tournament if they own it OR they participate in any round in it.
+    # Public tournaments are visible to everyone. Private tournaments require membership.
+    # Participating in any group round also grants access.
     return (
         select(Tournament.id)
+        .outerjoin(TournamentMember, TournamentMember.tournament_id == Tournament.id)
         .outerjoin(Round, Round.tournament_id == Tournament.id)
         .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
-        .where(or_(Tournament.owner_player_id == player_id, RoundParticipant.player_id == player_id))
+        .where(
+            or_(
+                Tournament.is_public.is_(True),
+                Tournament.owner_player_id == player_id,
+                TournamentMember.player_id == player_id,
+                RoundParticipant.player_id == player_id,
+            )
+        )
     )
 
 
 class TournamentCreate(BaseModel):
     course_id: int
     name: str = Field(min_length=1, max_length=128)
+    is_public: bool = False
 
 
 class TournamentPatch(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
+    is_public: bool | None = None
 
 
 class TournamentSummaryOut(BaseModel):
     id: int
     name: str
+    is_public: bool
     course_id: int
     course_name: str
     owner_id: str
@@ -70,6 +85,7 @@ class LeaderboardEntryOut(BaseModel):
 class TournamentOut(BaseModel):
     id: int
     name: str
+    is_public: bool
     course_id: int
     course_name: str
     owner_id: str
@@ -94,9 +110,21 @@ def create_tournament(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    t = Tournament(owner_player_id=owner.id, course_id=course.id, name=payload.name.strip())
+    t = Tournament(
+        owner_player_id=owner.id,
+        course_id=course.id,
+        name=payload.name.strip(),
+        is_public=payload.is_public,
+    )
     db.add(t)
     db.commit()
+
+    # Ensure owner is a member (important for test DBs created without migrations).
+    try:
+        db.add(TournamentMember(tournament_id=t.id, player_id=owner.id))
+        db.commit()
+    except IntegrityError:
+        db.rollback()
 
     return get_tournament(t.id, db=db, user_id=user_id)
 
@@ -130,6 +158,7 @@ def list_tournaments(
             TournamentSummaryOut(
                 id=t.id,
                 name=t.name,
+                is_public=bool(t.is_public),
                 course_id=t.course_id,
                 course_name=course_name,
                 owner_id=owner_id,
@@ -139,6 +168,49 @@ def list_tournaments(
         )
     return out
 
+
+class TournamentInviteCreate(BaseModel):
+    recipient: str = Field(min_length=1)
+
+
+class TournamentInviteOut(BaseModel):
+    id: int
+    tournament_id: int
+    tournament_name: str
+    requester_id: str
+    requester_name: str
+    created_at: datetime
+
+
+@router.get("/tournaments/invites", response_model=list[TournamentInviteOut])
+def list_tournament_invites(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+
+    requester = Player
+    rows = db.execute(
+        select(TournamentInvite, Tournament.name.label("tournament_name"), requester)
+        .join(Tournament, Tournament.id == TournamentInvite.tournament_id)
+        .join(requester, requester.id == TournamentInvite.requester_id)
+        .where(TournamentInvite.recipient_id == me.id)
+        .order_by(TournamentInvite.created_at.desc(), TournamentInvite.id.desc())
+    ).all()
+
+    out: list[TournamentInviteOut] = []
+    for inv, t_name, req in rows:
+        out.append(
+            TournamentInviteOut(
+                id=inv.id,
+                tournament_id=inv.tournament_id,
+                tournament_name=t_name,
+                requester_id=req.external_id,
+                requester_name=_player_label(req),
+                created_at=inv.created_at,
+            )
+        )
+    return out
 
 @router.get("/tournaments/{tournament_id}", response_model=TournamentOut)
 def get_tournament(
@@ -216,9 +288,11 @@ def get_tournament(
 
     leaderboard.sort(key=lambda x: (x.score_to_par, -x.holes_completed, x.player_name.lower()))
 
+    # If this is a private tournament, include invite-only visibility via is_public.
     return TournamentOut(
         id=t.id,
         name=t.name,
+        is_public=bool(t.is_public),
         course_id=t.course_id,
         course_name=t.course.name,
         owner_id=t.owner.external_id,
@@ -244,6 +318,9 @@ def update_tournament(
 
     if payload.name is not None:
         t.name = payload.name.strip()
+
+    if payload.is_public is not None:
+        t.is_public = payload.is_public
 
     db.commit()
     return get_tournament(tournament_id, db=db, user_id=user_id)
@@ -273,6 +350,16 @@ def create_group_round(
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
 
+    allowed = bool(t.is_public) or t.owner_player_id == leader.id or bool(
+        db.execute(
+            select(TournamentMember.id)
+            .where(TournamentMember.tournament_id == t.id, TournamentMember.player_id == leader.id)
+            .limit(1)
+        ).first()
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
     # Prevent multiple active rounds per leader (reuse existing constraint from /rounds).
     active = db.execute(
         select(Round.id)
@@ -281,6 +368,15 @@ def create_group_round(
     ).first()
     if active:
         raise HTTPException(status_code=409, detail="You already have an active round")
+
+    already_in_tournament = db.execute(
+        select(RoundParticipant.id)
+        .join(Round, RoundParticipant.round_id == Round.id)
+        .where(Round.tournament_id == t.id, RoundParticipant.player_id == leader.id)
+        .limit(1)
+    ).first()
+    if already_in_tournament:
+        raise HTTPException(status_code=409, detail="You are already in a group in this tournament")
 
     course = db.execute(
         select(Course)
@@ -324,6 +420,169 @@ def create_group_round(
 
     for p in players:
         db.add(RoundParticipant(round_id=rnd.id, player_id=p.id))
+
+        # Add registered players as members (guests are round-only).
+        if not (p.external_id or "").startswith("guest:"):
+            try:
+                with db.begin_nested():
+                    db.add(TournamentMember(tournament_id=t.id, player_id=p.id))
+            except IntegrityError:
+                # Membership already exists.
+                pass
+
+    db.commit()
+    return {"round_id": rnd.id}
+
+
+
+
+@router.post("/tournaments/{tournament_id}/invites", response_model=dict, status_code=201)
+def invite_to_tournament(
+    tournament_id: int,
+    payload: TournamentInviteCreate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    if t.owner_player_id != me.id:
+        raise HTTPException(status_code=403, detail="Only owner can invite")
+    if t.is_public:
+        raise HTTPException(status_code=400, detail="Public tournaments do not use invites")
+
+    from app.api.v1.rounds import _resolve_player_ref  # local import to avoid cycles
+
+    recipient = _resolve_player_ref(db, payload.recipient.strip())
+    if (recipient.external_id or "").startswith("guest:"):
+        raise HTTPException(status_code=400, detail="Cannot invite guest players")
+    if recipient.id == me.id:
+        raise HTTPException(status_code=400, detail="Cannot invite yourself")
+
+    already_member = db.execute(
+        select(TournamentMember.id)
+        .where(TournamentMember.tournament_id == t.id, TournamentMember.player_id == recipient.id)
+        .limit(1)
+    ).first()
+    if already_member:
+        raise HTTPException(status_code=409, detail="Player is already a member")
+
+    inv = TournamentInvite(tournament_id=t.id, requester_id=me.id, recipient_id=recipient.id)
+    db.add(inv)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Invite already exists")
+
+    return {"invite_id": inv.id}
+
+
+@router.post("/tournaments/invites/{invite_id}/accept", response_model=dict)
+def accept_tournament_invite(
+    invite_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+
+    inv = db.execute(select(TournamentInvite).where(TournamentInvite.id == invite_id)).scalars().one_or_none()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.recipient_id != me.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    try:
+        with db.begin_nested():
+            db.add(TournamentMember(tournament_id=inv.tournament_id, player_id=me.id))
+    except IntegrityError:
+        pass
+
+    db.delete(inv)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/tournaments/invites/{invite_id}/decline", response_model=dict)
+def decline_tournament_invite(
+    invite_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+
+    inv = db.execute(select(TournamentInvite).where(TournamentInvite.id == invite_id)).scalars().one_or_none()
+    if not inv:
+        raise HTTPException(status_code=404, detail="Invite not found")
+    if inv.recipient_id != me.id:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    db.delete(inv)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/tournaments/{tournament_id}/rounds/{round_id}/join", response_model=dict)
+def join_group_round(
+    tournament_id: int,
+    round_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+
+    allowed = bool(t.is_public) or t.owner_player_id == me.id or bool(
+        db.execute(
+            select(TournamentMember.id)
+            .where(TournamentMember.tournament_id == t.id, TournamentMember.player_id == me.id)
+            .limit(1)
+        ).first()
+    )
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    rnd = db.execute(select(Round).where(Round.id == round_id, Round.tournament_id == t.id)).scalars().one_or_none()
+    if not rnd:
+        raise HTTPException(status_code=404, detail="Group not found")
+    if rnd.completed_at is not None:
+        raise HTTPException(status_code=400, detail="Group is completed")
+
+    active_any = db.execute(
+        select(RoundParticipant.id)
+        .join(Round, RoundParticipant.round_id == Round.id)
+        .where(RoundParticipant.player_id == me.id, Round.completed_at.is_(None))
+        .limit(1)
+    ).first()
+    if active_any:
+        raise HTTPException(status_code=409, detail="You already have an active round")
+
+    already_in_tournament = db.execute(
+        select(RoundParticipant.id)
+        .join(Round, RoundParticipant.round_id == Round.id)
+        .where(Round.tournament_id == t.id, RoundParticipant.player_id == me.id)
+        .limit(1)
+    ).first()
+    if already_in_tournament:
+        raise HTTPException(status_code=409, detail="You are already in a group in this tournament")
+
+    players_count = db.execute(
+        select(func.count(RoundParticipant.id)).where(RoundParticipant.round_id == rnd.id)
+    ).scalar_one()
+    if int(players_count) >= 4:
+        raise HTTPException(status_code=409, detail="Group is full")
+
+    db.add(RoundParticipant(round_id=rnd.id, player_id=me.id))
+    try:
+        with db.begin_nested():
+            db.add(TournamentMember(tournament_id=t.id, player_id=me.id))
+    except IntegrityError:
+        pass
 
     db.commit()
     return {"round_id": rnd.id}

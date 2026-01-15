@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 
 import { useApi } from "../api/useApi";
-import type { TournamentSummary } from "../api/types";
+import type { TournamentInvite, TournamentSummary } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
 
@@ -12,6 +12,7 @@ export default function Tournaments() {
   const { request } = useApi();
 
   const [items, setItems] = useState<TournamentSummary[]>([]);
+  const [invites, setInvites] = useState<TournamentInvite[]>([]);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,13 +20,39 @@ export default function Tournaments() {
     setError(null);
     setLoading("Loading tournaments…");
     try {
-      const data = await request<TournamentSummary[]>("/api/v1/tournaments");
-      setItems(data);
+      const [tData, iData] = await Promise.all([
+        request<TournamentSummary[]>("/api/v1/tournaments"),
+        request<TournamentInvite[]>("/api/v1/tournaments/invites"),
+      ]);
+      setItems(tData);
+      setInvites(iData);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to load tournaments (${err.status}).`);
     } finally {
       setLoading(null);
+    }
+  }
+
+  async function acceptInvite(inviteId: number) {
+    setError(null);
+    try {
+      await request(`/api/v1/tournaments/invites/${inviteId}/accept`, { method: "POST" });
+      await load();
+    } catch (e) {
+      const err = e as ApiError;
+      setError(`Failed to accept invite (${err.status}).`);
+    }
+  }
+
+  async function declineInvite(inviteId: number) {
+    setError(null);
+    try {
+      await request(`/api/v1/tournaments/invites/${inviteId}/decline`, { method: "POST" });
+      await load();
+    } catch (e) {
+      const err = e as ApiError;
+      setError(`Failed to decline invite (${err.status}).`);
     }
   }
 
@@ -63,6 +90,41 @@ export default function Tournaments() {
         </div>
       )}
 
+      {!!invites.length && (
+        <div className="auth-card" style={{ overflow: "hidden" }}>
+          <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Invites</div>
+          <div className="stack">
+            {invites.map((i) => (
+              <div key={i.id} className="auth-card" style={{ padding: "1rem", boxShadow: "none" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    alignItems: "center",
+                  }}
+                >
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontWeight: 800 }}>{i.tournament_name}</div>
+                    <div className="auth-mono" style={{ wordBreak: "break-word" }}>
+                      From: {i.requester_name}
+                    </div>
+                  </div>
+                  <div className="auth-row" style={{ flexShrink: 0 }}>
+                    <button className="auth-btn primary" onClick={() => void acceptInvite(i.id)}>
+                      Accept
+                    </button>
+                    <button className="auth-btn secondary" onClick={() => void declineInvite(i.id)}>
+                      Decline
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {!items.length && !loading ? (
         <div className="auth-card">
           <div className="auth-mono">No tournaments yet.</div>
@@ -78,7 +140,7 @@ export default function Tournaments() {
                 <div>
                   <div style={{ fontWeight: 800 }}>{t.name}</div>
                   <div className="auth-mono">
-                    {t.course_name} · Groups: {t.groups_count}
+                    {t.course_name} · {t.is_public ? "Public" : "Private"} · Groups: {t.groups_count}
                   </div>
                 </div>
                 <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>

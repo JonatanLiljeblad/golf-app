@@ -41,6 +41,7 @@ export default function StartRound() {
 
   const [tournamentMode, setTournamentMode] = useState(false);
   const [tournamentName, setTournamentName] = useState("");
+  const [tournamentIsPublic, setTournamentIsPublic] = useState(false);
   const [tournamentId, setTournamentId] = useState<number | null>(null);
 
   const [round, setRound] = useState<Round | null>(null);
@@ -114,7 +115,11 @@ export default function StartRound() {
 
       const createdTournament = await request<{ id: number }>("/api/v1/tournaments", {
         method: "POST",
-        body: JSON.stringify({ course_id: selectedCourseId, name: tournamentName.trim() }),
+        body: JSON.stringify({
+          course_id: selectedCourseId,
+          name: tournamentName.trim(),
+          is_public: tournamentIsPublic,
+        }),
       });
       setTournamentId(createdTournament.id);
 
@@ -284,24 +289,40 @@ export default function StartRound() {
               checked={tournamentMode}
               onChange={(e) => {
                 setTournamentMode(e.target.checked);
-                if (!e.target.checked) setTournamentName("");
+                if (!e.target.checked) {
+                  setTournamentName("");
+                  setTournamentIsPublic(false);
+                }
               }}
               style={{ width: 18, height: 18 }}
             />
             <span style={{ fontWeight: 700 }}>Create tournament (multiple groups)</span>
           </label>
           {tournamentMode && (
-            <label style={{ display: "grid", gap: ".25rem" }}>
-              <span style={{ fontWeight: 700 }}>Tournament name</span>
-              <input
-                value={tournamentName}
-                onChange={(e) => setTournamentName(e.target.value)}
-                placeholder="e.g. Wednesday Stroke Play"
-              />
+            <div style={{ display: "grid", gap: ".5rem" }}>
+              <label style={{ display: "grid", gap: ".25rem" }}>
+                <span style={{ fontWeight: 700 }}>Tournament name</span>
+                <input
+                  value={tournamentName}
+                  onChange={(e) => setTournamentName(e.target.value)}
+                  placeholder="e.g. Wednesday Stroke Play"
+                />
+              </label>
+
+              <label className="auth-row" style={{ gap: ".5rem" }}>
+                <input
+                  type="checkbox"
+                  checked={tournamentIsPublic}
+                  onChange={(e) => setTournamentIsPublic(e.target.checked)}
+                  style={{ width: 18, height: 18 }}
+                />
+                <span style={{ fontWeight: 700 }}>Public tournament</span>
+              </label>
+
               <div className="auth-mono">
                 You will create your own 1–4 player group. Other groups start their own rounds in the same tournament.
               </div>
-            </label>
+            </div>
           )}
         </div>
 

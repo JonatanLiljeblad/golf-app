@@ -10,10 +10,14 @@ type ApiError = { status: number; body: unknown };
 export default function TournamentPage() {
   const { tournamentId } = useParams();
   const navigate = useNavigate();
-  const { isAuthenticated, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { request } = useApi();
 
+  const viewerId = user?.sub ?? "";
+
   const [t, setT] = useState<Tournament | null>(null);
+  const [inviteRecipient, setInviteRecipient] = useState("");
+  const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +49,7 @@ export default function TournamentPage() {
   async function startMyGroup() {
     if (!t) return;
     setError(null);
+    setMsg(null);
     setLoading("Starting your group…");
     try {
       const res = await request<{ round_id: number }>(`/api/v1/tournaments/${t.id}/rounds`, {
@@ -60,6 +65,58 @@ export default function TournamentPage() {
           : null;
       const msg = detail != null ? String(detail) : null;
       setError(msg ? `${msg} (${err.status}).` : `Failed to start group (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function joinGroup(roundId: number) {
+    if (!t) return;
+    setError(null);
+    setMsg(null);
+    setLoading("Joining group…");
+    try {
+      const res = await request<{ round_id: number }>(
+        `/api/v1/tournaments/${t.id}/rounds/${roundId}/join`,
+        { method: "POST" }
+      );
+      navigate(`/rounds/${res.round_id}`);
+    } catch (e) {
+      const err = e as ApiError;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
+      const msg = detail != null ? String(detail) : null;
+      setError(msg ? `${msg} (${err.status}).` : `Failed to join group (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function sendInvite() {
+    if (!t) return;
+    const recipient = inviteRecipient.trim();
+    if (!recipient) return;
+
+    setError(null);
+    setMsg(null);
+    setLoading("Sending invite…");
+    try {
+      await request(`/api/v1/tournaments/${t.id}/invites`, {
+        method: "POST",
+        body: JSON.stringify({ recipient }),
+      });
+      setInviteRecipient("");
+      setMsg("Invite sent.");
+    } catch (e) {
+      const err = e as ApiError;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
+      const msg = detail != null ? String(detail) : null;
+      setError(msg ? `${msg} (${err.status}).` : `Failed to send invite (${err.status}).`);
     } finally {
       setLoading(null);
     }
@@ -84,6 +141,11 @@ export default function TournamentPage() {
           <div className="auth-mono">{error}</div>
         </div>
       )}
+      {msg && (
+        <div className="auth-card content-narrow">
+          <div className="auth-mono">{msg}</div>
+        </div>
+      )}
 
       {t && (
         <>
@@ -94,7 +156,9 @@ export default function TournamentPage() {
                   <h1 className="auth-title" style={{ marginBottom: ".25rem" }}>
                     {t.name}
                   </h1>
-                  <div className="auth-mono">{t.course_name}</div>
+                  <div className="auth-mono">
+                    {t.course_name} · {t.is_public ? "Public" : "Private"}
+                  </div>
                 </div>
                 <button className="auth-btn secondary" onClick={() => void load(t.id)} disabled={!!loading}>
                   Refresh
@@ -113,6 +177,30 @@ export default function TournamentPage() {
               </div>
             </div>
           </div>
+
+          {!t.is_public && t.owner_id === viewerId && (
+            <div className="content-narrow">
+              <div className="auth-card" style={{ display: "grid", gap: ".5rem" }}>
+                <div style={{ fontWeight: 800 }}>Invite players</div>
+                <div className="auth-mono">Private tournaments are invite-only.</div>
+                <input
+                  value={inviteRecipient}
+                  onChange={(e) => setInviteRecipient(e.target.value)}
+                  placeholder="Invite by email / username / Auth0 id"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void sendInvite();
+                  }}
+                />
+                <button
+                  className="auth-btn primary"
+                  onClick={() => void sendInvite()}
+                  disabled={!inviteRecipient.trim() || !!loading}
+                >
+                  Send invite
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="auth-card">
             <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Leaderboard</div>
@@ -169,9 +257,20 @@ export default function TournamentPage() {
                         <div style={{ fontWeight: 800 }}>Round #{g.round_id}</div>
                         <div className="auth-mono">Players: {g.players_count} · Leader: {g.owner_id}</div>
                       </div>
-                      <Link className="auth-btn secondary" to={`/rounds/${g.round_id}`}>
-                        Open
-                      </Link>
+                      <div className="auth-row">
+                        {g.players_count < 4 && (
+                          <button
+                            className="auth-btn primary"
+                            onClick={() => void joinGroup(g.round_id)}
+                            disabled={!!loading}
+                          >
+                            Join
+                          </button>
+                        )}
+                        <Link className="auth-btn secondary" to={`/rounds/${g.round_id}`}>
+                          Open
+                        </Link>
+                      </div>
                     </div>
                   </div>
                 ))}

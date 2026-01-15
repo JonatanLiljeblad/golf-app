@@ -3,7 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -11,6 +11,8 @@ from app.api.deps import ensure_player, get_current_user_id, get_db
 from app.models.course import Course
 from app.models.player import Player
 from app.models.round import HoleScore, Round, RoundParticipant
+from app.models.tournament import Tournament
+from app.models.tournament_member import TournamentMember
 
 router = APIRouter()
 
@@ -416,6 +418,8 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
     rnd = db.execute(
         select(Round)
         .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
+        .outerjoin(Tournament, Tournament.id == Round.tournament_id)
+        .outerjoin(TournamentMember, TournamentMember.tournament_id == Tournament.id)
         .options(
             joinedload(Round.owner),
             joinedload(Round.course).joinedload(Course.holes),
@@ -424,7 +428,18 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         )
         .where(
             Round.id == round_id,
-            or_(Round.owner_player_id == player_id, RoundParticipant.player_id == player_id),
+            or_(
+                Round.owner_player_id == player_id,
+                RoundParticipant.player_id == player_id,
+                and_(
+                    Round.tournament_id.isnot(None),
+                    or_(
+                        Tournament.is_public.is_(True),
+                        Tournament.owner_player_id == player_id,
+                        TournamentMember.player_id == player_id,
+                    ),
+                ),
+            ),
         )
     ).scalars().unique().one_or_none()
 

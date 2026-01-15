@@ -60,6 +60,7 @@ export type RoundSummary = {
 export type TournamentSummary = {
   id: number;
   name: string;
+  is_public: boolean;
   course_id: number;
   course_name: string;
   owner_id: string;
@@ -89,10 +90,20 @@ export type TournamentLeaderboardEntry = {
 export type Tournament = {
   id: number;
   name: string;
+  is_public: boolean;
   course_id: number;
   course_name: string;
   owner_id: string;
   created_at: string;
   groups: TournamentGroup[];
   leaderboard: TournamentLeaderboardEntry[];
+};
+
+export type TournamentInvite = {
+  id: number;
+  tournament_id: number;
+  tournament_name: string;
+  requester_id: string;
+  requester_name: string;
+  created_at: string;
 };
