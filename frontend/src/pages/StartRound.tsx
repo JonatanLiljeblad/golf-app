@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
 import type { Course, Player, Round } from "../api/types";
@@ -23,6 +23,7 @@ function friendLabel(p: Player): string {
 export default function StartRound() {
   const { isAuthenticated, loginWithRedirect, user } = useAuth0();
   const { request } = useApi();
+  const navigate = useNavigate();
 
   const viewerId = user?.sub ?? "";
 
@@ -120,7 +121,7 @@ export default function StartRound() {
           body: JSON.stringify({ course_id: selectedCourseId, stats_enabled: statsEnabled, player_ids, guest_players }),
         });
         setTournamentId(null);
-        setRound(created);
+        navigate(`/rounds/${created.id}`);
         return;
       }
 
@@ -142,8 +143,7 @@ export default function StartRound() {
         }
       );
 
-      const createdRound = await request<Round>(`/api/v1/rounds/${createdGroup.round_id}`);
-      setRound(createdRound);
+      navigate(`/rounds/${createdGroup.round_id}`);
     } catch (e) {
       const err = e as ApiError;
       const detail =
