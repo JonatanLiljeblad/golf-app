@@ -472,6 +472,7 @@ class GuestPlayerIn(BaseModel):
 
 class TournamentRoundCreate(BaseModel):
     # Players are added the same way as /rounds.
+    stats_enabled: bool = False
     player_ids: list[str] | None = None
     guest_players: list[GuestPlayerIn] | None = None
 
@@ -547,7 +548,12 @@ def create_group_round(
     if len(players) + len(guest_payloads) > 4:
         raise HTTPException(status_code=400, detail="max 4 players")
 
-    rnd = Round(owner_player_id=leader.id, course_id=t.course_id, tournament_id=t.id)
+    rnd = Round(
+        owner_player_id=leader.id,
+        course_id=t.course_id,
+        tournament_id=t.id,
+        stats_enabled=bool(payload.stats_enabled),
+    )
     db.add(rnd)
     db.flush()
 

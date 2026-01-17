@@ -18,6 +18,9 @@ export type RoundHole = {
   distance: number | null;
   hcp: number | null;
   strokes: Record<string, number | null>;
+  putts?: Record<string, number | null> | null;
+  fairway?: Record<string, string | null> | null;
+  gir?: Record<string, string | null> | null;
 };
 
 export type Player = {
@@ -42,6 +45,7 @@ export type Round = {
   players?: Player[];
   started_at: string;
   completed_at: string | null;
+  stats_enabled?: boolean;
   holes: RoundHole[];
   total_par: number;
   total_strokes: number | null;

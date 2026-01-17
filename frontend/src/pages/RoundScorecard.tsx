@@ -51,20 +51,44 @@ export default function RoundScorecard() {
   const [activeHoleNumber, setActiveHoleNumber] = useState<number>(1);
   const [padPage, setPadPage] = useState<1 | 2>(1);
 
+  const [draftStrokes, setDraftStrokes] = useState<number | null>(null);
+  const [draftPutts, setDraftPutts] = useState<number | null>(null);
+  const [draftFairway, setDraftFairway] = useState<string | null>(null);
+  const [draftGir, setDraftGir] = useState<string | null>(null);
+
   const holes = round?.holes ?? [];
   const front9 = holes.filter((h) => h.number <= 9);
   const back9 = holes.filter((h) => h.number >= 10);
   const activeHole = holes.find((h) => h.number === activeHoleNumber) ?? holes[0] ?? null;
 
+  const statsEnabled = !!round?.stats_enabled;
+
   const canEdit = (pid: string) => !round?.completed_at && !tournamentLocked && (pid === viewerId || isOwner);
   const isParticipant = !!round && !!viewerId && round.player_ids.includes(viewerId);
   const readOnlyTournamentGroup = !!round?.tournament_id && !isOwner && !isParticipant;
+
+  const activeSavedStrokes = activeHole ? (activeHole.strokes?.[activePlayerId] ?? null) : null;
+  const activeSavedPutts = activeHole ? (activeHole.putts?.[activePlayerId] ?? null) : null;
+  const activeSavedFairway = activeHole ? (activeHole.fairway?.[activePlayerId] ?? null) : null;
+  const activeSavedGir = activeHole ? (activeHole.gir?.[activePlayerId] ?? null) : null;
+  const activeSavedComplete =
+    activeSavedStrokes != null && (!statsEnabled || (activeSavedPutts != null && !!activeSavedFairway && !!activeSavedGir));
+  const blockHoleAdvance = statsEnabled && canEdit(activePlayerId) && !activeSavedComplete;
 
   const [viewMode, setViewMode] = useState<"hole" | "scorecard">(readOnlyTournamentGroup ? "scorecard" : "hole");
 
   useEffect(() => {
     if (readOnlyTournamentGroup) setViewMode("scorecard");
   }, [readOnlyTournamentGroup]);
+
+  useEffect(() => {
+    if (!activeHole) return;
+    const pid = activePlayerId;
+    setDraftStrokes(activeHole.strokes?.[pid] ?? null);
+    setDraftPutts(activeHole.putts?.[pid] ?? null);
+    setDraftFairway(activeHole.fairway?.[pid] ?? null);
+    setDraftGir(activeHole.gir?.[pid] ?? null);
+  }, [round?.id, activeHoleNumber, activePlayerId, statsEnabled, activeHole]);
 
   function sumPar(hs: typeof holes) {
     return hs.reduce((acc, h) => acc + h.par, 0);
@@ -83,13 +107,62 @@ export default function RoundScorecard() {
     return any ? total : null;
   }
 
-  async function submitScore(holeNumber: number, playerId: string, strokes: number) {
+  function sumPutts(pid: string, hs: typeof holes) {
+    let total = 0;
+    let any = false;
+    for (const h of hs) {
+      const v = h.putts?.[pid] ?? null;
+      if (v != null) {
+        total += v;
+        any = true;
+      }
+    }
+    return any ? total : null;
+  }
+
+  function countDir(pid: string, hs: typeof holes, field: "fairway" | "gir", target: string) {
+    let hit = 0;
+    let total = 0;
+    for (const h of hs) {
+      const v = (field === "fairway" ? h.fairway?.[pid] : h.gir?.[pid]) ?? null;
+      if (v != null) {
+        total += 1;
+        if (v === target) hit += 1;
+      }
+    }
+    return { hit, total };
+  }
+
+  function dirLabel(v: string | null | undefined) {
+    if (!v) return "—";
+    switch (v) {
+      case "hit":
+        return "Hit";
+      case "left":
+        return "L";
+      case "right":
+        return "R";
+      case "short":
+        return "S";
+      case "long":
+        return "Long";
+      default:
+        return v;
+    }
+  }
+
+  async function submitScore(
+    holeNumber: number,
+    playerId: string,
+    strokes: number,
+    extra?: { putts?: number | null; fairway?: string | null; gir?: string | null }
+  ) {
     if (!round || round.completed_at || tournamentLocked || readOnlyTournamentGroup) return;
     setError(null);
     try {
       await request(`/api/v1/rounds/${round.id}/scores`, {
         method: "POST",
-        body: JSON.stringify({ hole_number: holeNumber, strokes, player_id: playerId }),
+        body: JSON.stringify({ hole_number: holeNumber, strokes, player_id: playerId, ...(extra ?? {}) }),
       });
       await load(round.id);
 
@@ -202,6 +275,7 @@ export default function RoundScorecard() {
                 <div className="auth-mono">Par {round.total_par}</div>
                 <div className="auth-mono">
                   {round.completed_at ? "Completed" : "In progress"} · Your strokes: {round.total_strokes ?? "—"}
+                  {statsEnabled ? " · Stats: On" : " · Stats: Off"}
                 </div>
               </div>
               <button className="auth-btn secondary" onClick={() => void load(round.id)}>
@@ -219,6 +293,35 @@ export default function RoundScorecard() {
                 {round.tournament_completed_at
                   ? "Scores are locked."
                   : round.tournament_pause_message || "Scores are temporarily locked."}
+              </div>
+            </div>
+          )}
+
+          {round.completed_at && statsEnabled && (
+            <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
+              <div style={{ fontWeight: 800 }}>Statistics</div>
+              <div className="scorecard-hole__summary" style={{ marginTop: ".75rem" }}>
+                {round.player_ids.map((pid) => {
+                  const putts = sumPutts(pid, holes);
+                  const fir = countDir(pid, holes, "fairway", "hit");
+                  const gir = countDir(pid, holes, "gir", "hit");
+                  return (
+                    <div key={`stats-${pid}`} className="scorecard-hole__summaryItem">
+                      <div className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {playerLabel[pid] ?? pid}
+                      </div>
+                      <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                        Putts: {putts ?? "—"}
+                      </div>
+                      <div className="auth-mono">
+                        FIR: {fir.total ? `${Math.round((fir.hit / fir.total) * 100)}%` : "—"}
+                      </div>
+                      <div className="auth-mono">
+                        GIR: {gir.total ? `${Math.round((gir.hit / gir.total) * 100)}%` : "—"}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -316,11 +419,29 @@ export default function RoundScorecard() {
                             <tr key={`p-${pid}`}>
                               <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>{playerLabel[pid] ?? pid}</td>
                               {front9.map((h) => (
-                                <td key={`${pid}-${h.number}`}>{h.strokes?.[pid] ?? ""}</td>
+                                <td
+                                  key={`${pid}-${h.number}`}
+                                  title={
+                                    statsEnabled
+                                      ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
+                                      : undefined
+                                  }
+                                >
+                                  {h.strokes?.[pid] ?? ""}
+                                </td>
                               ))}
                               <td className="auth-mono">{out ?? "—"}</td>
                               {back9.map((h) => (
-                                <td key={`${pid}-${h.number}`}>{h.strokes?.[pid] ?? ""}</td>
+                                <td
+                                  key={`${pid}-${h.number}`}
+                                  title={
+                                    statsEnabled
+                                      ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
+                                      : undefined
+                                  }
+                                >
+                                  {h.strokes?.[pid] ?? ""}
+                                </td>
                               ))}
                               <td className="auth-mono">{inn ?? "—"}</td>
                               <td className="auth-mono">{tot ?? "—"}</td>
@@ -380,6 +501,11 @@ export default function RoundScorecard() {
                             <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
                               {activeHole.strokes?.[pid] ?? "—"}
                             </div>
+                            {statsEnabled && (
+                              <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                                P {activeHole.putts?.[pid] ?? "—"} · FIR {dirLabel(activeHole.fairway?.[pid])} · GIR {dirLabel(activeHole.gir?.[pid])}
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -418,7 +544,7 @@ export default function RoundScorecard() {
                           const next = idx >= 0 ? holes[idx + 1] : null;
                           if (next) setActiveHoleNumber(next.number);
                         }}
-                        disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1}
+                        disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1 || blockHoleAdvance}
                       >
                         Next
                       </button>
@@ -447,6 +573,11 @@ export default function RoundScorecard() {
                         <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
                           {activeHole.strokes?.[pid] ?? "—"}
                         </div>
+                        {statsEnabled && (
+                          <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                            P {activeHole.putts?.[pid] ?? "—"} · FIR {dirLabel(activeHole.fairway?.[pid])} · GIR {dirLabel(activeHole.gir?.[pid])}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -463,8 +594,12 @@ export default function RoundScorecard() {
                             key={n}
                             type="button"
                             className="scorepad-btn"
+                            style={draftStrokes === n ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
                             disabled={!canEdit(activePlayerId)}
-                            onClick={() => void submitScore(activeHole.number, activePlayerId, n)}
+                            onClick={() => {
+                              if (statsEnabled) setDraftStrokes(n);
+                              else void submitScore(activeHole.number, activePlayerId, n);
+                            }}
                           >
                             {n}
                           </button>
@@ -478,9 +613,96 @@ export default function RoundScorecard() {
                         {padPage === 1 ? ">" : "<"}
                       </button>
                     </div>
-                    <div className="auth-mono" style={{ marginTop: ".5rem" }}>
-                      Tip: tap a number to save it (auto-advances to the next hole).
-                    </div>
+
+                    {statsEnabled && (
+                      <div style={{ display: "grid", gap: ".75rem", marginTop: ".75rem" }}>
+                        <div>
+                          <div className="auth-mono" style={{ marginBottom: ".35rem" }}>Putts</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: ".6rem" }}>
+                            {[0, 1, 2, 3, 4, 5].map((n) => (
+                              <button
+                                key={`p-${n}`}
+                                type="button"
+                                className="scorepad-btn"
+                                style={draftPutts === n ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
+                                disabled={!canEdit(activePlayerId)}
+                                onClick={() => setDraftPutts(n)}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="auth-mono" style={{ marginBottom: ".35rem" }}>Fairway</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: ".6rem" }}>
+                            {["left", "hit", "right", "short"].map((v) => (
+                              <button
+                                key={`f-${v}`}
+                                type="button"
+                                className="scorepad-btn"
+                                style={draftFairway === v ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
+                                disabled={!canEdit(activePlayerId)}
+                                onClick={() => setDraftFairway(v)}
+                              >
+                                {v === "hit" ? "Hit" : v}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="auth-mono" style={{ marginBottom: ".35rem" }}>GIR</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: ".6rem" }}>
+                            {["left", "hit", "right", "short", "long"].map((v) => (
+                              <button
+                                key={`g-${v}`}
+                                type="button"
+                                className="scorepad-btn"
+                                style={draftGir === v ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
+                                disabled={!canEdit(activePlayerId)}
+                                onClick={() => setDraftGir(v)}
+                              >
+                                {v === "hit" ? "Hit" : v}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <button
+                          className="auth-btn primary"
+                          disabled={
+                            !canEdit(activePlayerId) ||
+                            draftStrokes == null ||
+                            draftPutts == null ||
+                            !draftFairway ||
+                            !draftGir
+                          }
+                          onClick={() =>
+                            draftStrokes != null
+                              ? void submitScore(activeHole.number, activePlayerId, draftStrokes, {
+                                  putts: draftPutts,
+                                  fairway: draftFairway,
+                                  gir: draftGir,
+                                })
+                              : undefined
+                          }
+                        >
+                          Save & Next
+                        </button>
+
+                        <div className="auth-mono">
+                          Tip: pick strokes + stats, then Save (auto-advances to the next hole).
+                        </div>
+                      </div>
+                    )}
+
+                    {!statsEnabled && (
+                      <div className="auth-mono" style={{ marginTop: ".5rem" }}>
+                        Tip: tap a number to save it (auto-advances to the next hole).
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

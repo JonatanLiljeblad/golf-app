@@ -53,6 +53,8 @@ export default function StartRound() {
   const [tournamentIsPublic, setTournamentIsPublic] = useState(false);
   const [tournamentId, setTournamentId] = useState<number | null>(null);
 
+  const [statsEnabled, setStatsEnabled] = useState(false);
+
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,7 +117,7 @@ export default function StartRound() {
       if (!tournamentMode) {
         const created = await request<Round>("/api/v1/rounds", {
           method: "POST",
-          body: JSON.stringify({ course_id: selectedCourseId, player_ids, guest_players }),
+          body: JSON.stringify({ course_id: selectedCourseId, stats_enabled: statsEnabled, player_ids, guest_players }),
         });
         setTournamentId(null);
         setRound(created);
@@ -136,7 +138,7 @@ export default function StartRound() {
         `/api/v1/tournaments/${createdTournament.id}/rounds`,
         {
           method: "POST",
-          body: JSON.stringify({ player_ids, guest_players }),
+          body: JSON.stringify({ stats_enabled: statsEnabled, player_ids, guest_players }),
         }
       );
 
@@ -330,7 +332,21 @@ export default function StartRound() {
           </select>
         </label>
 
-        <div style={{ display: "grid", gap: ".5rem" }}>
+        <div style={{ display: "grid", gap: ".75rem" }}>
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <div style={{ fontWeight: 700 }}>Statistics</div>
+            <label className="auth-row" style={{ gap: ".5rem" }}>
+              <input
+                type="checkbox"
+                checked={statsEnabled}
+                onChange={(e) => setStatsEnabled(e.target.checked)}
+                style={{ width: 18, height: 18 }}
+              />
+              <span style={{ fontWeight: 700 }}>Enable stats (putts, fairway, GIR)</span>
+            </label>
+            <div className="auth-mono">If enabled, each hole requires putts + fairway + GIR before continuing.</div>
+          </div>
+
           <div style={{ fontWeight: 700 }}>Tournament</div>
           <label className="auth-row" style={{ gap: ".5rem" }}>
             <input

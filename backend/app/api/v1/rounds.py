@@ -24,6 +24,7 @@ class GuestPlayerIn(BaseModel):
 
 class RoundCreate(BaseModel):
     course_id: int
+    stats_enabled: bool = False
     player_ids: list[str] | None = None
     guest_players: list[GuestPlayerIn] | None = None
 
@@ -35,6 +36,9 @@ class RoundAddParticipants(BaseModel):
 class ScoreIn(BaseModel):
     hole_number: int = Field(ge=1, le=18)
     strokes: int = Field(ge=1, le=30)
+    putts: int | None = Field(default=None, ge=0, le=10)
+    fairway: str | None = None
+    gir: str | None = None
     player_id: str | None = None
 
 
@@ -53,6 +57,9 @@ class ScorecardHole(BaseModel):
     distance: int | None = None
     hcp: int | None = None
     strokes: dict[str, int | None]
+    putts: dict[str, int | None] | None = None
+    fairway: dict[str, str | None] | None = None
+    gir: dict[str, str | None] | None = None
 
 
 class RoundPlayerOut(BaseModel):
@@ -77,6 +84,7 @@ class RoundOut(BaseModel):
     players: list[RoundPlayerOut]
     started_at: datetime
     completed_at: datetime | None
+    stats_enabled: bool
     holes: list[ScorecardHole]
     total_par: int
     total_strokes: int | None
@@ -160,7 +168,11 @@ def create_round(
     if len(players) + len(guest_payloads) > 4:
         raise HTTPException(status_code=400, detail="max 4 players")
 
-    rnd = Round(owner_player_id=owner.id, course_id=payload.course_id)
+    rnd = Round(
+        owner_player_id=owner.id,
+        course_id=payload.course_id,
+        stats_enabled=bool(payload.stats_enabled),
+    )
     db.add(rnd)
     db.flush()
 
@@ -299,6 +311,17 @@ def submit_score(
     if target_external_id != user_id and current_player.id != rnd.owner_player_id:
         raise HTTPException(status_code=403, detail="Only owner can enter scores for others")
 
+    allowed_fairway = {"left", "hit", "right", "short"}
+    allowed_gir = {"left", "hit", "right", "short", "long"}
+
+    if rnd.stats_enabled:
+        if payload.putts is None or payload.fairway is None or payload.gir is None:
+            raise HTTPException(status_code=400, detail="putts, fairway, and gir are required when stats are enabled")
+        if payload.fairway not in allowed_fairway:
+            raise HTTPException(status_code=400, detail="Invalid fairway value")
+        if payload.gir not in allowed_gir:
+            raise HTTPException(status_code=400, detail="Invalid gir value")
+
     score = db.execute(
         select(HoleScore).where(
             HoleScore.round_id == round_id,
@@ -309,12 +332,21 @@ def submit_score(
 
     if score:
         score.strokes = payload.strokes
+        if payload.putts is not None:
+            score.putts = payload.putts
+        if payload.fairway is not None:
+            score.fairway = payload.fairway
+        if payload.gir is not None:
+            score.gir = payload.gir
     else:
         score = HoleScore(
             round_id=round_id,
             player_id=target_player_id,
             hole_number=payload.hole_number,
             strokes=payload.strokes,
+            putts=payload.putts,
+            fairway=payload.fairway,
+            gir=payload.gir,
         )
         db.add(score)
 
@@ -324,11 +356,20 @@ def submit_score(
     if rnd.completed_at is None:
         participant_ids = list(participant_by_external_id.values())
         existing = db.execute(
-            select(HoleScore.player_id, HoleScore.hole_number).where(
+            select(HoleScore.player_id, HoleScore.hole_number, HoleScore.putts, HoleScore.fairway, HoleScore.gir).where(
                 HoleScore.round_id == round_id
             )
         ).all()
-        have = {(pid, hn) for (pid, hn) in existing}
+
+        if not rnd.stats_enabled:
+            have = {(pid, hn) for (pid, hn, _p, _f, _g) in existing}
+        else:
+            have = {
+                (pid, hn)
+                for (pid, hn, p, f, g) in existing
+                if p is not None and f is not None and g is not None
+            }
+
         need = {(pid, hn) for pid in participant_ids for hn in valid_numbers}
         if need.issubset(have):
             rnd.completed_at = datetime.now(timezone.utc)
@@ -459,8 +500,19 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
     participant_ids = [p.player.external_id for p in rnd.participants] or [rnd.owner.external_id]
 
     strokes_by_hole: dict[int, dict[str, int]] = {}
+    putts_by_hole: dict[int, dict[str, int]] = {}
+    fairway_by_hole: dict[int, dict[str, str]] = {}
+    gir_by_hole: dict[int, dict[str, str]] = {}
+
     for s in rnd.scores:
-        strokes_by_hole.setdefault(s.hole_number, {})[s.player.external_id] = s.strokes
+        ext = s.player.external_id
+        strokes_by_hole.setdefault(s.hole_number, {})[ext] = s.strokes
+        if s.putts is not None:
+            putts_by_hole.setdefault(s.hole_number, {})[ext] = s.putts
+        if s.fairway is not None:
+            fairway_by_hole.setdefault(s.hole_number, {})[ext] = s.fairway
+        if s.gir is not None:
+            gir_by_hole.setdefault(s.hole_number, {})[ext] = s.gir
 
     holes = []
     for h in rnd.course.holes:
@@ -470,10 +522,16 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
                 par=h.par,
                 distance=h.distance,
                 hcp=h.hcp,
-                strokes={
-                    pid: strokes_by_hole.get(h.number, {}).get(pid)
-                    for pid in participant_ids
-                },
+                strokes={pid: strokes_by_hole.get(h.number, {}).get(pid) for pid in participant_ids},
+                putts={pid: putts_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
+                if rnd.stats_enabled
+                else None,
+                fairway={pid: fairway_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
+                if rnd.stats_enabled
+                else None,
+                gir={pid: gir_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
+                if rnd.stats_enabled
+                else None,
             )
         )
 
@@ -518,6 +576,7 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         players=players,
         started_at=rnd.started_at,
         completed_at=rnd.completed_at,
+        stats_enabled=bool(rnd.stats_enabled),
         holes=holes,
         total_par=total_par,
         total_strokes=owner_total,
