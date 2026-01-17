@@ -20,7 +20,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column(
         "rounds",
-        sa.Column("stats_enabled", sa.Boolean(), server_default=sa.text("0"), nullable=False),
+        sa.Column("stats_enabled", sa.Boolean(), server_default=sa.text("false"), nullable=False),
     )
     op.add_column("hole_scores", sa.Column("putts", sa.Integer(), nullable=True))
     op.add_column("hole_scores", sa.Column("fairway", sa.String(length=16), nullable=True))
