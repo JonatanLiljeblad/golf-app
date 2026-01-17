@@ -28,5 +28,9 @@ class Tournament(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    pause_message: Mapped[str | None] = mapped_column(String(280))
+
     owner = relationship("Player")
     course = relationship("Course")

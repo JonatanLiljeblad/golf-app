@@ -197,11 +197,14 @@ export default function Courses() {
                   aria-label={`Hole ${h.number} handicap`}
                 >
                   <option value="">HCP</option>
-                  {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
+                  {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => {
+                    const usedElsewhere = holes.some((x, j) => j !== idx && x.hcp === n);
+                    return (
+                      <option key={n} value={n} disabled={usedElsewhere}>
+                        {n}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>

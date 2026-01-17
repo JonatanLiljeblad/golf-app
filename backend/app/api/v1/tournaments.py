@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -59,13 +59,16 @@ class TournamentSummaryOut(BaseModel):
     course_id: int
     course_name: str
     owner_id: str
+    owner_name: str
     created_at: datetime
+    completed_at: datetime | None
     groups_count: int
 
 
 class TournamentGroupOut(BaseModel):
     round_id: int
     owner_id: str
+    owner_name: str
     players_count: int
     started_at: datetime
     completed_at: datetime | None
@@ -89,7 +92,13 @@ class TournamentOut(BaseModel):
     course_id: int
     course_name: str
     owner_id: str
+    owner_name: str
     created_at: datetime
+    completed_at: datetime | None
+    paused_at: datetime | None
+    pause_message: str | None
+    my_group_round_id: int | None
+    active_groups_count: int
     groups: list[TournamentGroupOut]
     leaderboard: list[LeaderboardEntryOut]
 
@@ -142,18 +151,31 @@ def list_tournaments(
             Tournament,
             Course.name.label("course_name"),
             owner.external_id.label("owner_id"),
+            owner.name.label("owner_name"),
+            owner.username.label("owner_username"),
+            owner.email.label("owner_email"),
+            Tournament.completed_at.label("completed_at"),
             func.count(func.distinct(Round.id)).label("groups_count"),
         )
         .join(Course, Course.id == Tournament.course_id)
         .join(owner, owner.id == Tournament.owner_player_id)
         .outerjoin(Round, Round.tournament_id == Tournament.id)
         .where(Tournament.id.in_(_tournament_access_clause(me.id)))
-        .group_by(Tournament.id, Course.name, owner.external_id)
+        .group_by(
+            Tournament.id,
+            Course.name,
+            owner.external_id,
+            owner.name,
+            owner.username,
+            owner.email,
+            Tournament.completed_at,
+        )
         .order_by(Tournament.created_at.desc(), Tournament.id.desc())
     ).all()
 
     out: list[TournamentSummaryOut] = []
-    for (t, course_name, owner_id, groups_count) in rows:
+    for (t, course_name, owner_id, owner_name, owner_username, owner_email, completed_at, groups_count) in rows:
+        label = owner_name or owner_username or owner_email or owner_id
         out.append(
             TournamentSummaryOut(
                 id=t.id,
@@ -162,7 +184,9 @@ def list_tournaments(
                 course_id=t.course_id,
                 course_name=course_name,
                 owner_id=owner_id,
+                owner_name=label,
                 created_at=t.created_at,
+                completed_at=completed_at,
                 groups_count=int(groups_count or 0),
             )
         )
@@ -247,6 +271,7 @@ def get_tournament(
         TournamentGroupOut(
             round_id=r.id,
             owner_id=r.owner.external_id,
+            owner_name=_player_label(r.owner),
             players_count=len(r.participants),
             started_at=r.started_at,
             completed_at=r.completed_at,
@@ -288,6 +313,12 @@ def get_tournament(
 
     leaderboard.sort(key=lambda x: (x.score_to_par, -x.holes_completed, x.player_name.lower()))
 
+    my_group_round_id = None
+    for r in rounds:
+        if any(p.player_id == me.id for p in r.participants):
+            my_group_round_id = r.id
+            break
+
     # If this is a private tournament, include invite-only visibility via is_public.
     return TournamentOut(
         id=t.id,
@@ -296,7 +327,13 @@ def get_tournament(
         course_id=t.course_id,
         course_name=t.course.name,
         owner_id=t.owner.external_id,
+        owner_name=_player_label(t.owner),
         created_at=t.created_at,
+        completed_at=t.completed_at,
+        paused_at=t.paused_at,
+        pause_message=t.pause_message,
+        my_group_round_id=my_group_round_id,
+        active_groups_count=sum(1 for r in rounds if r.completed_at is None),
         groups=groups,
         leaderboard=leaderboard,
     )
@@ -326,6 +363,108 @@ def update_tournament(
     return get_tournament(tournament_id, db=db, user_id=user_id)
 
 
+@router.post("/tournaments/{tournament_id}/finish", response_model=TournamentOut)
+def finish_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    if t.owner_player_id != me.id:
+        raise HTTPException(status_code=403, detail="Only owner can finish tournament")
+
+    if t.completed_at is None:
+        now = datetime.now(timezone.utc)
+        t.completed_at = now
+        t.paused_at = None
+        t.pause_message = None
+        # Finishing a tournament also finishes all its active group rounds.
+        db.execute(
+            update(Round)
+            .where(Round.tournament_id == t.id, Round.completed_at.is_(None))
+            .values(completed_at=now)
+        )
+        db.commit()
+
+    return get_tournament(tournament_id, db=db, user_id=user_id)
+
+
+class TournamentPauseIn(BaseModel):
+    message: str | None = Field(default=None, max_length=280)
+
+
+@router.post("/tournaments/{tournament_id}/pause", response_model=TournamentOut)
+def pause_tournament(
+    tournament_id: int,
+    payload: TournamentPauseIn,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    if t.owner_player_id != me.id:
+        raise HTTPException(status_code=403, detail="Only owner can pause tournament")
+    if t.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Tournament is finished")
+
+    t.paused_at = datetime.now(timezone.utc)
+    t.pause_message = (payload.message or "").strip() or None
+    db.commit()
+    return get_tournament(tournament_id, db=db, user_id=user_id)
+
+
+@router.post("/tournaments/{tournament_id}/resume", response_model=TournamentOut)
+def resume_tournament(
+    tournament_id: int,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    if t.owner_player_id != me.id:
+        raise HTTPException(status_code=403, detail="Only owner can resume tournament")
+
+    if t.paused_at is not None:
+        t.paused_at = None
+        t.pause_message = None
+        db.commit()
+
+    return get_tournament(tournament_id, db=db, user_id=user_id)
+
+
+@router.delete("/tournaments/{tournament_id}", response_model=dict)
+def delete_tournament(
+    tournament_id: int,
+    force: bool = Query(False),
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    me = ensure_player(db, user_id)
+    t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
+    if not t:
+        raise HTTPException(status_code=404, detail="Tournament not found")
+    if t.owner_player_id != me.id:
+        raise HTTPException(status_code=403, detail="Only owner can delete tournament")
+
+    active = db.execute(
+        select(Round.id).where(Round.tournament_id == t.id, Round.completed_at.is_(None)).limit(1)
+    ).first()
+    if active and not force:
+        raise HTTPException(status_code=409, detail="Tournament has active group rounds")
+
+    db.execute(update(Round).where(Round.tournament_id == t.id).values(tournament_id=None))
+    db.delete(t)
+    db.commit()
+    return {"ok": True}
+
+
 class GuestPlayerIn(BaseModel):
     name: str
     handicap: float | None = None
@@ -349,6 +488,9 @@ def create_group_round(
     t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
+
+    if t.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Tournament is finished")
 
     allowed = bool(t.is_public) or t.owner_player_id == leader.id or bool(
         db.execute(
@@ -450,6 +592,8 @@ def invite_to_tournament(
         raise HTTPException(status_code=404, detail="Tournament not found")
     if t.owner_player_id != me.id:
         raise HTTPException(status_code=403, detail="Only owner can invite")
+    if t.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Tournament is finished")
     if t.is_public:
         raise HTTPException(status_code=400, detail="Public tournaments do not use invites")
 
@@ -536,6 +680,9 @@ def join_group_round(
     t = db.execute(select(Tournament).where(Tournament.id == tournament_id)).scalars().one_or_none()
     if not t:
         raise HTTPException(status_code=404, detail="Tournament not found")
+
+    if t.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Tournament is finished")
 
     allowed = bool(t.is_public) or t.owner_player_id == me.id or bool(
         db.execute(

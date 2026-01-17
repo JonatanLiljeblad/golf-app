@@ -37,7 +37,7 @@ class PlayerMeUpdateIn(BaseModel):
 
 class PlayerCreateIn(BaseModel):
     email: str
-    username: str | None = None
+    username: str
     name: str | None = None
     handicap: float | None = None
 
@@ -76,6 +76,9 @@ def update_me(
     if payload.handicap is not None:
         player.handicap = payload.handicap
 
+    if not player.email or not player.username:
+        raise HTTPException(status_code=400, detail="email and username required")
+
     try:
         db.commit()
     except IntegrityError:
@@ -96,6 +99,10 @@ def create_player(
     if not email:
         raise HTTPException(status_code=400, detail="email required")
 
+    username = (payload.username or "").strip()
+    if not username:
+        raise HTTPException(status_code=400, detail="username required")
+
     existing = db.execute(select(Player).where(Player.email == email)).scalars().one_or_none()
     if existing:
         raise HTTPException(status_code=409, detail="email already exists")
@@ -103,7 +110,7 @@ def create_player(
     p = Player(
         external_id=f"profile:{uuid4()}",
         email=email,
-        username=(payload.username or "").strip() or None,
+        username=username,
         name=(payload.name or "").strip() or None,
         handicap=payload.handicap,
     )

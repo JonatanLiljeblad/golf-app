@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
@@ -34,6 +34,15 @@ export default function StartRound() {
   const [friends, setFriends] = useState<Player[]>([]);
   const [friendFilter, setFriendFilter] = useState("");
   const [selectedFriend, setSelectedFriend] = useState("");
+
+  const [addPlayerModalOpen, setAddPlayerModalOpen] = useState(false);
+  const [addPlayerView, setAddPlayerView] = useState<"menu" | "friend" | "guest" | "search">("menu");
+
+  const [playerSearchQ, setPlayerSearchQ] = useState("");
+  const [playerSearchResults, setPlayerSearchResults] = useState<Player[]>([]);
+  const [playerSearchLoading, setPlayerSearchLoading] = useState<string | null>(null);
+  const [playerSearchMsg, setPlayerSearchMsg] = useState<string | null>(null);
+  const [playerLookup, setPlayerLookup] = useState<Record<string, Player>>({});
 
   const [guestName, setGuestName] = useState("");
   const [guestHandicap, setGuestHandicap] = useState("");
@@ -175,6 +184,33 @@ export default function StartRound() {
     }
   }
 
+  async function searchPlayers() {
+    const needle = playerSearchQ.trim();
+    if (!needle) {
+      setPlayerSearchResults([]);
+      setPlayerSearchMsg(null);
+      return;
+    }
+
+    setPlayerSearchMsg(null);
+    setPlayerSearchLoading("Searching…");
+    try {
+      const data = await request<Player[]>(`/api/v1/players?q=${encodeURIComponent(needle)}`);
+      setPlayerSearchResults(data);
+      setPlayerSearchMsg(!data.length ? "No players found." : null);
+      setPlayerLookup((prev) => {
+        const next = { ...prev };
+        for (const p of data) next[p.external_id] = p;
+        return next;
+      });
+    } catch (e) {
+      const err = e as ApiError;
+      setPlayerSearchMsg(`Search failed (${err.status}).`);
+    } finally {
+      setPlayerSearchLoading(null);
+    }
+  }
+
   function maxManualPlayerSlots(): number {
     return Math.max(0, 3 - guestPlayers.length - friendPlayerIds.length);
   }
@@ -216,6 +252,17 @@ export default function StartRound() {
     setGuestHandicap("");
   }
 
+  const slots = useMemo(() => {
+    const other: Array<
+      | { kind: "player"; external_id: string }
+      | { kind: "guest"; name: string; idx: number }
+    > = [
+      ...friendPlayerIds.map((external_id) => ({ kind: "player" as const, external_id })),
+      ...guestPlayers.map((g, idx) => ({ kind: "guest" as const, name: g.name, idx })),
+    ];
+    return other;
+  }, [friendPlayerIds, guestPlayers]);
+
   useEffect(() => {
     if (isAuthenticated) {
       void loadCourses();
@@ -244,7 +291,9 @@ export default function StartRound() {
 
   return (
     <div className="page content-narrow">
-      <h1 style={{ margin: 0 }}>Start New Round</h1>
+      <h1 className="auth-title" style={{ margin: 0 }}>
+        Start New Round
+      </h1>
 
       {error && (
         <div className="auth-card">
@@ -328,132 +377,258 @@ export default function StartRound() {
 
         <div style={{ display: "grid", gap: ".75rem" }}>
           <div style={{ fontWeight: 700 }}>Players (up to 4)</div>
-          <div className="auth-mono">You: {viewerId || "—"}</div>
 
-          <div style={{ display: "grid", gap: ".5rem" }}>
-            <div style={{ fontWeight: 700 }}>Add from friends</div>
-            <input
-              value={friendFilter}
-              onChange={(e) => setFriendFilter(e.target.value)}
-              placeholder="Search your friends"
-            />
-            <select
-              value={selectedFriend}
-              onChange={(e) => setSelectedFriend(e.target.value)}
-              disabled={!friends.length}
-            >
-              <option value="">Select friend…</option>
-              {friends
-                .filter((f) => {
-                  if (f.external_id === viewerId) return false;
-                  if (friendPlayerIds.includes(f.external_id)) return false;
+          <div className="player-slots">
+            <div className="player-slot filled">
+              <div style={{ fontWeight: 800 }}>You</div>
+              <div className="auth-mono">{viewerId || "—"}</div>
+            </div>
 
-                  const q = friendFilter.trim().toLowerCase();
-                  if (!q) return true;
-                  const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
-                  return hay.includes(q);
-                })
-                .map((f) => (
-                  <option key={f.external_id} value={f.external_id}>
-                    {friendLabel(f)}
-                  </option>
-                ))}
-            </select>
-            <button
-              className="auth-btn secondary"
-              onClick={() => {
-                addFriendToRound(selectedFriend);
-                setSelectedFriend("");
-              }}
-              disabled={!selectedFriend}
-            >
-              Add friend
-            </button>
-
-            {!!friendPlayerIds.length && (
-              <div style={{ display: "grid", gap: ".5rem" }}>
-                {friendPlayerIds.map((id) => {
-                  const p = friends.find((f) => f.external_id === id);
-                  return (
-                    <div key={id} className="auth-row" style={{ justifyContent: "space-between" }}>
-                      <div>
-                        <div style={{ fontWeight: 700 }}>{p ? friendLabel(p) : id}</div>
-                        <div className="auth-mono">friend</div>
-                      </div>
+            {slots.map((s) => {
+              if (s.kind === "guest") {
+                return (
+                  <div key={`guest-${s.idx}`} className="player-slot filled">
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: ".5rem",
+                        flexWrap: "wrap",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <div style={{ fontWeight: 800, minWidth: 0, flex: "1 1 160px" }}>{s.name}</div>
                       <button
                         className="auth-btn secondary"
-                        onClick={() => setFriendPlayerIds((prev) => prev.filter((x) => x !== id))}
+                        style={{ padding: ".35rem .6rem", flexShrink: 0 }}
+                        onClick={() => setGuestPlayers((prev) => prev.filter((_, i) => i !== s.idx))}
                       >
                         Remove
                       </button>
                     </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    <div className="auth-mono">guest</div>
+                  </div>
+                );
+              }
 
-          <div style={{ display: "grid", gap: ".5rem" }}>
-            <div style={{ fontWeight: 700 }}>Or add by email / username / Auth0 id</div>
-            {otherPlayerIds.map((pid, idx) => (
-              <input
-                key={idx}
-                placeholder={
-                  idx < maxManualPlayerSlots()
-                    ? "Other player email or username (optional)"
-                    : "Slot used by friend/guest player"
-                }
-                value={pid}
-                disabled={idx >= maxManualPlayerSlots()}
-                onChange={(e) =>
-                  setOtherPlayerIds((prev) => {
-                    const next = [...prev];
-                    next[idx] = e.target.value;
-                    return next;
-                  })
-                }
-              />
-            ))}
-          </div>
+              const p = friends.find((f) => f.external_id === s.external_id) ?? playerLookup[s.external_id];
+              const kindLabel = friends.some((f) => f.external_id === s.external_id) ? "friend" : "player";
+              const label = p ? friendLabel(p) : s.external_id;
 
-          <div style={{ display: "grid", gap: ".5rem" }}>
-            <div style={{ fontWeight: 700 }}>Guest players (round only)</div>
-            <div className="auth-mono">Guests are only saved for this round.</div>
-            <input
-              value={guestName}
-              onChange={(e) => setGuestName(e.target.value)}
-              placeholder="Guest name (required)"
-            />
-            <input
-              value={guestHandicap}
-              onChange={(e) => setGuestHandicap(e.target.value)}
-              placeholder="Guest handicap (optional, e.g. +0.1)"
-            />
-            <button className="auth-btn secondary" onClick={() => addGuest()} disabled={!guestName.trim()}>
-              Add guest
-            </button>
-
-            {!!guestPlayers.length && (
-              <div style={{ display: "grid", gap: ".5rem" }}>
-                {guestPlayers.map((g, idx) => (
-                  <div key={`${g.name}-${idx}`} className="auth-row" style={{ justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{g.name}</div>
-                      <div className="auth-mono">guest</div>
-                    </div>
+              return (
+                <div key={s.external_id} className="player-slot filled">
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: ".5rem",
+                      flexWrap: "wrap",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    <div style={{ fontWeight: 800, minWidth: 0, flex: "1 1 160px" }}>{label}</div>
                     <button
                       className="auth-btn secondary"
-                      onClick={() =>
-                        setGuestPlayers((prev) => prev.filter((_, i) => i !== idx))
-                      }
+                      style={{ padding: ".35rem .6rem", flexShrink: 0 }}
+                      onClick={() => setFriendPlayerIds((prev) => prev.filter((x) => x !== s.external_id))}
                     >
                       Remove
                     </button>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="auth-mono">{kindLabel}</div>
+                </div>
+              );
+            })}
+
+            {Array.from({ length: Math.max(0, 3 - slots.length) }, (_, i) => (
+              <button
+                key={`empty-${i}`}
+                type="button"
+                className="player-slot add"
+                disabled={selectedPlayersCount() >= 4}
+                onClick={() => {
+                  setError(null);
+                  setAddPlayerView("menu");
+                  setAddPlayerModalOpen(true);
+                }}
+              >
+                <div className="player-slot__plus">+</div>
+                <div style={{ fontWeight: 800 }}>Add player</div>
+              </button>
+            ))}
           </div>
+
+          {addPlayerModalOpen && (
+            <div
+              className="modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setAddPlayerModalOpen(false)}
+            >
+              <div className="auth-card modal-card" onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+                  <div style={{ fontWeight: 900 }}>Add player</div>
+                  <button
+                    className="auth-btn secondary"
+                    style={{ padding: ".45rem .7rem" }}
+                    onClick={() => setAddPlayerModalOpen(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {addPlayerView === "menu" && (
+                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                    <button className="auth-btn primary" onClick={() => setAddPlayerView("friend")}>
+                      Add a friend
+                    </button>
+                    <button className="auth-btn primary" onClick={() => setAddPlayerView("guest")}>
+                      Add a guest
+                    </button>
+                    <button className="auth-btn primary" onClick={() => setAddPlayerView("search")}>
+                      Search for a player
+                    </button>
+                  </div>
+                )}
+
+                {addPlayerView === "friend" && (
+                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                    <div className="auth-mono">Pick from your friends list.</div>
+                    <input
+                      value={friendFilter}
+                      onChange={(e) => setFriendFilter(e.target.value)}
+                      placeholder="Search your friends"
+                    />
+                    <select
+                      value={selectedFriend}
+                      onChange={(e) => setSelectedFriend(e.target.value)}
+                      disabled={!friends.length}
+                    >
+                      <option value="">Select friend…</option>
+                      {friends
+                        .filter((f) => {
+                          if (f.external_id === viewerId) return false;
+                          if (friendPlayerIds.includes(f.external_id)) return false;
+
+                          const q = friendFilter.trim().toLowerCase();
+                          if (!q) return true;
+                          const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
+                          return hay.includes(q);
+                        })
+                        .map((f) => (
+                          <option key={f.external_id} value={f.external_id}>
+                            {friendLabel(f)}
+                          </option>
+                        ))}
+                    </select>
+                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
+                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                        Back
+                      </button>
+                      <button
+                        className="auth-btn primary"
+                        onClick={() => {
+                          addFriendToRound(selectedFriend);
+                          setSelectedFriend("");
+                          setAddPlayerModalOpen(false);
+                        }}
+                        disabled={!selectedFriend}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {addPlayerView === "guest" && (
+                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                    <div className="auth-mono">Guests are only saved for this round.</div>
+                    <input
+                      value={guestName}
+                      onChange={(e) => setGuestName(e.target.value)}
+                      placeholder="Guest name (required)"
+                    />
+                    <input
+                      value={guestHandicap}
+                      onChange={(e) => setGuestHandicap(e.target.value)}
+                      placeholder="Guest handicap (optional, e.g. +0.1)"
+                    />
+                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
+                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                        Back
+                      </button>
+                      <button
+                        className="auth-btn primary"
+                        onClick={() => {
+                          addGuest();
+                          setAddPlayerModalOpen(false);
+                        }}
+                        disabled={!guestName.trim()}
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {addPlayerView === "search" && (
+                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                    <input
+                      value={playerSearchQ}
+                      onChange={(e) => setPlayerSearchQ(e.target.value)}
+                      placeholder="Search by name, username, email, or Auth0 id"
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void searchPlayers();
+                      }}
+                    />
+                    <button className="auth-btn secondary" onClick={() => void searchPlayers()} disabled={!!playerSearchLoading}>
+                      {playerSearchLoading ?? "Search"}
+                    </button>
+
+                    {playerSearchMsg && <div className="auth-mono">{playerSearchMsg}</div>}
+
+                    {!!playerSearchResults.length && (
+                      <div style={{ display: "grid", gap: ".5rem" }}>
+                        {playerSearchResults
+                          .filter((p) => p.external_id !== viewerId)
+                          .map((p) => (
+                            <div
+                              key={p.external_id}
+                              className="auth-row"
+                              style={{ justifyContent: "space-between", alignItems: "center" }}
+                            >
+                              <div>
+                                <div style={{ fontWeight: 800 }}>{friendLabel(p)}</div>
+                                <div className="auth-mono">{p.email ?? p.username ?? p.external_id}</div>
+                              </div>
+                              <button
+                                className="auth-btn primary"
+                                disabled={friendPlayerIds.includes(p.external_id) || selectedPlayersCount() >= 4}
+                                onClick={() => {
+                                  addFriendToRound(p.external_id);
+                                  setAddPlayerModalOpen(false);
+                                }}
+                              >
+                                Add
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    )}
+
+                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
+                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                        Back
+                      </button>
+                      <button className="auth-btn secondary" onClick={() => setAddPlayerModalOpen(false)}>
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         <button

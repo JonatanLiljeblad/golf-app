@@ -223,6 +223,17 @@ textarea:disabled {
   gap: 0.75rem;
 }
 
+.card-inset {
+  width: 100%;
+  margin: 0;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: none;
+  box-sizing: border-box;
+}
+
 .table-scroll {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
@@ -243,4 +254,81 @@ textarea:disabled {
 
 .auth-btn:disabled:hover {
   transform: none;
+}
+
+/* Start round: player slots + modal */
+.player-slots {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+@media (min-width: 720px) {
+  .player-slots {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.player-slot {
+  width: 100%;
+  min-height: 104px;
+  padding: 0.9rem;
+  border-radius: 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.03);
+  box-sizing: border-box;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.player-slot.filled {
+  border-style: solid;
+  border-color: rgba(255, 255, 255, 0.08);
+  align-items: stretch;
+  text-align: left;
+  justify-content: flex-start;
+  gap: 0.5rem;
+}
+
+button.player-slot.add {
+  cursor: pointer;
+}
+
+button.player-slot.add:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.player-slot__plus {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  border-radius: 20px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 50;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 520px;
 }

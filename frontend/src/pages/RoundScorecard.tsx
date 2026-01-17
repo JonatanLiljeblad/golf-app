@@ -35,9 +35,10 @@ export default function RoundScorecard() {
   const [inviteId, setInviteId] = useState("");
 
   const isOwner = !!round && viewerId && round.owner_id === viewerId;
+  const tournamentLocked = !!round?.tournament_completed_at || !!round?.tournament_paused_at;
 
   async function submitScore(holeNumber: number, playerId: string, strokes: number) {
-    if (!round || round.completed_at) return;
+    if (!round || round.completed_at || tournamentLocked) return;
     setError(null);
     try {
       await request(`/api/v1/rounds/${round.id}/scores`, {
@@ -138,6 +139,19 @@ export default function RoundScorecard() {
             </div>
           </div>
 
+          {(round.tournament_completed_at || round.tournament_paused_at) && (
+            <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
+              <div style={{ fontWeight: 800 }}>
+                {round.tournament_completed_at ? "Tournament finished" : "Tournament paused"}
+              </div>
+              <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                {round.tournament_completed_at
+                  ? "Scores are locked."
+                  : round.tournament_pause_message || "Scores are temporarily locked."}
+              </div>
+            </div>
+          )}
+
           <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
             <div style={{ display: "grid", gap: ".75rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
@@ -198,7 +212,7 @@ export default function RoundScorecard() {
                     <div className="auth-mono">{h.distance ?? "—"}</div>
                     <div className="auth-mono">{h.hcp ?? "—"}</div>
                     {round.player_ids.map((pid) => {
-                      const canEdit = !round.completed_at && (pid === viewerId || isOwner);
+                      const canEdit = !round.completed_at && !tournamentLocked && (pid === viewerId || isOwner);
                       return (
                         <input
                           key={`${h.number}-${pid}`}

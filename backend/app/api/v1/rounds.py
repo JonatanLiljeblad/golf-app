@@ -69,6 +69,9 @@ class RoundOut(BaseModel):
     course_id: int
     course_name: str
     tournament_id: int | None
+    tournament_completed_at: datetime | None
+    tournament_paused_at: datetime | None
+    tournament_pause_message: str | None
     owner_id: str
     player_ids: list[str]
     players: list[RoundPlayerOut]
@@ -273,6 +276,13 @@ def submit_score(
     ).scalars().unique().one_or_none()
     if not rnd:
         raise HTTPException(status_code=404, detail="Round not found")
+
+    if rnd.tournament_id is not None:
+        t = db.execute(select(Tournament).where(Tournament.id == rnd.tournament_id)).scalars().one_or_none()
+        if t and t.completed_at is not None:
+            raise HTTPException(status_code=409, detail="Tournament is finished")
+        if t and t.paused_at is not None:
+            raise HTTPException(status_code=409, detail=t.pause_message or "Tournament is paused")
 
     valid_numbers = {h.number for h in rnd.course.holes}
     if payload.hole_number not in valid_numbers:
@@ -483,11 +493,26 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         for p in rnd.participants
     ]
 
+    t_completed_at = None
+    t_paused_at = None
+    t_pause_message = None
+    if rnd.tournament_id is not None:
+        row = db.execute(
+            select(Tournament.completed_at, Tournament.paused_at, Tournament.pause_message).where(
+                Tournament.id == rnd.tournament_id
+            )
+        ).first()
+        if row:
+            t_completed_at, t_paused_at, t_pause_message = row
+
     return RoundOut(
         id=rnd.id,
         course_id=rnd.course_id,
         course_name=rnd.course.name,
         tournament_id=rnd.tournament_id,
+        tournament_completed_at=t_completed_at,
+        tournament_paused_at=t_paused_at,
+        tournament_pause_message=t_pause_message,
         owner_id=rnd.owner.external_id,
         player_ids=participant_ids,
         players=players,

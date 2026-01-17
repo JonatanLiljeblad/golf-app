@@ -34,6 +34,9 @@ export type Round = {
   course_id: number;
   course_name: string;
   tournament_id: number | null;
+  tournament_completed_at?: string | null;
+  tournament_paused_at?: string | null;
+  tournament_pause_message?: string | null;
   owner_id: string;
   player_ids: string[];
   players?: Player[];
@@ -64,13 +67,16 @@ export type TournamentSummary = {
   course_id: number;
   course_name: string;
   owner_id: string;
+  owner_name?: string | null;
   created_at: string;
+  completed_at?: string | null;
   groups_count: number;
 };
 
 export type TournamentGroup = {
   round_id: number;
   owner_id: string;
+  owner_name?: string | null;
   players_count: number;
   started_at: string;
   completed_at: string | null;
@@ -94,7 +100,13 @@ export type Tournament = {
   course_id: number;
   course_name: string;
   owner_id: string;
+  owner_name?: string | null;
   created_at: string;
+  completed_at?: string | null;
+  paused_at?: string | null;
+  pause_message?: string | null;
+  my_group_round_id?: number | null;
+  active_groups_count?: number;
   groups: TournamentGroup[];
   leaderboard: TournamentLeaderboardEntry[];
 };

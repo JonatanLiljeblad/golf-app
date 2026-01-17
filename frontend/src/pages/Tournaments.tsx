@@ -61,6 +61,9 @@ export default function Tournaments() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
+  const active = items.filter((t) => !t.completed_at);
+  const history = items.filter((t) => !!t.completed_at);
+
   if (!isAuthenticated) {
     return (
       <div className="auth-card content-narrow">
@@ -95,7 +98,7 @@ export default function Tournaments() {
           <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Invites</div>
           <div className="stack">
             {invites.map((i) => (
-              <div key={i.id} className="auth-card" style={{ padding: "1rem", boxShadow: "none" }}>
+              <div key={i.id} className="card-inset">
                 <div
                   style={{
                     display: "flex",
@@ -110,7 +113,7 @@ export default function Tournaments() {
                       From: {i.requester_name}
                     </div>
                   </div>
-                  <div className="auth-row" style={{ flexShrink: 0 }}>
+                  <div className="auth-row" style={{ flexShrink: 0, marginTop: ".15rem" }}>
                     <button className="auth-btn primary" onClick={() => void acceptInvite(i.id)}>
                       Accept
                     </button>
@@ -134,21 +137,49 @@ export default function Tournaments() {
         </div>
       ) : (
         <div className="stack">
-          {items.map((t) => (
-            <div key={t.id} className="auth-card" style={{ padding: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                <div>
-                  <div style={{ fontWeight: 800 }}>{t.name}</div>
-                  <div className="auth-mono">
-                    {t.course_name} · {t.is_public ? "Public" : "Private"} · Groups: {t.groups_count}
+          <div style={{ fontWeight: 800 }}>Active</div>
+          {!active.length ? (
+            <div className="auth-card">
+              <div className="auth-mono">No active tournaments.</div>
+            </div>
+          ) : (
+            active.map((t) => (
+              <div key={t.id} className="auth-card" style={{ padding: "1rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                  <div>
+                    <div style={{ fontWeight: 800 }}>{t.name}</div>
+                    <div className="auth-mono">
+                      {t.course_name} · {t.is_public ? "Public" : "Private"} · Groups: {t.groups_count}
+                    </div>
+                  </div>
+                  <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>
+                    View
+                  </Link>
+                </div>
+              </div>
+            ))
+          )}
+
+          {!!history.length && (
+            <>
+              <div style={{ fontWeight: 800, marginTop: ".5rem" }}>History</div>
+              {history.map((t) => (
+                <div key={t.id} className="auth-card" style={{ padding: "1rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                    <div>
+                      <div style={{ fontWeight: 800 }}>{t.name}</div>
+                      <div className="auth-mono">
+                        {t.course_name} · {t.is_public ? "Public" : "Private"} · Finished · Groups: {t.groups_count}
+                      </div>
+                    </div>
+                    <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>
+                      View
+                    </Link>
                   </div>
                 </div>
-                <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>
-                  View
-                </Link>
-              </div>
-            </div>
-          ))}
+              ))}
+            </>
+          )}
         </div>
       )}
     </div>

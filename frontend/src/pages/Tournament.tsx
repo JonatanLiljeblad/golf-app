@@ -94,6 +94,110 @@ export default function TournamentPage() {
     }
   }
 
+  async function pauseTournament() {
+    if (!t) return;
+    if (t.completed_at || t.paused_at) return;
+
+    const message = window.prompt("Pause message (optional)", t.pause_message ?? "") ?? "";
+
+    setError(null);
+    setMsg(null);
+    setLoading("Pausing tournament…");
+    try {
+      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/pause`, {
+        method: "POST",
+        body: JSON.stringify({ message }),
+      });
+      setT(updated);
+    } catch (e) {
+      const err = e as ApiError;
+      setError(`Failed to pause tournament (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function resumeTournament() {
+    if (!t) return;
+    if (t.completed_at || !t.paused_at) return;
+
+    setError(null);
+    setMsg(null);
+    setLoading("Resuming tournament…");
+    try {
+      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/resume`, { method: "POST" });
+      setT(updated);
+    } catch (e) {
+      const err = e as ApiError;
+      setError(`Failed to resume tournament (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function finishTournament() {
+    if (!t) return;
+    if (t.completed_at) return;
+
+    const hasActive = (t.active_groups_count ?? 0) > 0;
+    const ok = window.confirm(
+      hasActive
+        ? `Finish tournament? There are ${t.active_groups_count} group(s) still playing.`
+        : "Finish tournament?"
+    );
+    if (!ok) return;
+
+    setError(null);
+    setMsg(null);
+    setLoading("Finishing tournament…");
+    try {
+      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/finish`, { method: "POST" });
+      setT(updated);
+      setMsg("Tournament finished.");
+    } catch (e) {
+      const err = e as ApiError;
+      setError(`Failed to finish tournament (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  async function deleteTournament() {
+    if (!t) return;
+    const ok = window.confirm(
+      "Delete tournament? This will remove invites/members. Existing rounds will remain but no longer be linked to the tournament."
+    );
+    if (!ok) return;
+
+    setError(null);
+    setMsg(null);
+    setLoading("Deleting tournament…");
+    try {
+      await request(`/api/v1/tournaments/${t.id}`, { method: "DELETE" });
+      navigate("/tournaments");
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status === 409) {
+        const force = window.confirm(
+          "There are players mid-round in this tournament. Delete anyway?"
+        );
+        if (!force) return;
+        try {
+          await request(`/api/v1/tournaments/${t.id}?force=true`, { method: "DELETE" });
+          navigate("/tournaments");
+          return;
+        } catch (e2) {
+          const err2 = e2 as ApiError;
+          setError(`Failed to delete tournament (${err2.status}).`);
+          return;
+        }
+      }
+      setError(`Failed to delete tournament (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
   async function sendInvite() {
     if (!t) return;
     const recipient = inviteRecipient.trim();
@@ -158,27 +262,75 @@ export default function TournamentPage() {
                   </h1>
                   <div className="auth-mono">
                     {t.course_name} · {t.is_public ? "Public" : "Private"}
+                    {t.completed_at ? " · Finished" : ""}
+                    {t.paused_at && !t.completed_at ? " · Paused" : ""}
                   </div>
+                  <div className="auth-mono">Host: {t.owner_name ?? t.owner_id}</div>
                 </div>
                 <button className="auth-btn secondary" onClick={() => void load(t.id)} disabled={!!loading}>
                   Refresh
                 </button>
               </div>
+
+              {t.paused_at && !t.completed_at && (
+                <div className="card-inset" style={{ marginTop: ".75rem" }}>
+                  <div style={{ fontWeight: 800 }}>Tournament paused</div>
+                  <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                    {t.pause_message || "Scores are temporarily locked."}
+                  </div>
+                </div>
+              )}
+
               <div className="auth-row" style={{ justifyContent: "space-between", marginTop: ".75rem" }}>
                 <div className="auth-mono">Groups: {t.groups.length}</div>
-                <div className="auth-row">
-                  <button className="auth-btn primary" onClick={() => void startMyGroup()} disabled={!!loading}>
-                    Start my group
-                  </button>
-                  <Link className="auth-btn secondary" to="/round/start">
-                    Start a solo round
-                  </Link>
-                </div>
+                {!t.completed_at && (
+                  <div className="auth-row">
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => {
+                        if (t.my_group_round_id) navigate(`/rounds/${t.my_group_round_id}`);
+                        else void startMyGroup();
+                      }}
+                      disabled={!!loading || (!!t.paused_at && !t.completed_at)}
+                    >
+                      {t.my_group_round_id ? "Go to my group" : "Start my group"}
+                    </button>
+                  </div>
+                )}
               </div>
+
+              {t.owner_id === viewerId && (
+                <div className="auth-row" style={{ marginTop: ".75rem" }}>
+                  {!t.completed_at && (
+                    <>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => void pauseTournament()}
+                        disabled={!!loading || !!t.paused_at}
+                      >
+                        Pause tournament
+                      </button>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => void resumeTournament()}
+                        disabled={!!loading || !t.paused_at}
+                      >
+                        Resume tournament
+                      </button>
+                      <button className="auth-btn secondary" onClick={() => void finishTournament()} disabled={!!loading}>
+                        Finish tournament
+                      </button>
+                    </>
+                  )}
+                  <button className="auth-btn secondary" onClick={() => void deleteTournament()} disabled={!!loading}>
+                    Delete tournament
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
-          {!t.is_public && t.owner_id === viewerId && (
+          {!t.completed_at && !t.is_public && t.owner_id === viewerId && (
             <div className="content-narrow">
               <div className="auth-card" style={{ display: "grid", gap: ".5rem" }}>
                 <div style={{ fontWeight: 800 }}>Invite players</div>
@@ -230,7 +382,9 @@ export default function TournamentPage() {
                       <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>
                         {e.player_name}
                       </div>
-                      <div className="auth-mono">{e.score_to_par > 0 ? `+${e.score_to_par}` : e.score_to_par}</div>
+                      <div className="auth-mono">
+                        {e.score_to_par === 0 ? "E" : e.score_to_par > 0 ? `+${e.score_to_par}` : e.score_to_par}
+                      </div>
                       <div className="auth-mono">{e.strokes}</div>
                       <div className="auth-mono">{e.holes_completed}</div>
                       <div className="auth-mono">{e.current_hole ?? "—"}</div>
@@ -244,39 +398,72 @@ export default function TournamentPage() {
             )}
           </div>
 
-          <div className="auth-card">
-            <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Groups</div>
-            {!t.groups.length ? (
-              <div className="auth-mono">No groups yet.</div>
-            ) : (
-              <div className="stack">
-                {t.groups.map((g) => (
-                  <div key={g.round_id} className="auth-card" style={{ padding: "1rem" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
-                      <div>
-                        <div style={{ fontWeight: 800 }}>Round #{g.round_id}</div>
-                        <div className="auth-mono">Players: {g.players_count} · Leader: {g.owner_id}</div>
+          {!t.completed_at && (
+            <div className="auth-card">
+              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Groups</div>
+              {!t.groups.length ? (
+                <div className="auth-mono">No groups yet.</div>
+              ) : (
+                <div className="stack">
+                  {t.groups.map((g) => {
+                    const isMine = !!t.my_group_round_id && g.round_id === t.my_group_round_id;
+                    const canJoinOthers = !t.my_group_round_id;
+
+                    return (
+                      <div
+                        key={g.round_id}
+                        className="card-inset"
+                        style={
+                          isMine
+                            ? {
+                                borderColor: "rgba(99, 93, 255, 0.55)",
+                                background: "rgba(99, 93, 255, 0.08)",
+                              }
+                            : undefined
+                        }
+                      >
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            gap: "1rem",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontWeight: 800 }}>
+                              Round #{g.round_id}
+                              {isMine ? " · Your group" : ""}
+                            </div>
+                            <div className="auth-mono" style={{ wordBreak: "break-word" }}>
+                              Players: {g.players_count} · Leader: {g.owner_name ?? g.owner_id}
+                            </div>
+                          </div>
+                          <div className="auth-row" style={{ flexShrink: 0 }}>
+                            {canJoinOthers && g.players_count < 4 && (
+                              <button
+                                className="auth-btn primary"
+                                onClick={() => void joinGroup(g.round_id)}
+                                disabled={!!loading}
+                              >
+                                Join
+                              </button>
+                            )}
+                            <Link
+                              className={isMine ? "auth-btn primary" : "auth-btn secondary"}
+                              to={`/rounds/${g.round_id}`}
+                            >
+                              Open
+                            </Link>
+                          </div>
+                        </div>
                       </div>
-                      <div className="auth-row">
-                        {g.players_count < 4 && (
-                          <button
-                            className="auth-btn primary"
-                            onClick={() => void joinGroup(g.round_id)}
-                            disabled={!!loading}
-                          >
-                            Join
-                          </button>
-                        )}
-                        <Link className="auth-btn secondary" to={`/rounds/${g.round_id}`}>
-                          Open
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
     </div>

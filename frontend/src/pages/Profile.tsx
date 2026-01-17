@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
 import type { Player } from "../api/types";
@@ -29,6 +30,7 @@ export default function Profile() {
     user,
   } = useAuth0();
   const { request } = useApi();
+  const location = useLocation();
 
   const [me, setMe] = useState<Player | null>(null);
   const [saving, setSaving] = useState(false);
@@ -118,6 +120,11 @@ export default function Profile() {
       <div className="auth-card">
         <h1 className="auth-title">Profile</h1>
         <p className="auth-subtitle">Set your username/email so others can add you to a round.</p>
+        {location.search.includes("required=1") && (
+          <div className="auth-mono" style={{ marginTop: ".5rem" }}>
+            Complete your profile (email + username) to continue.
+          </div>
+        )}
 
         <div className="auth-row">
           {!isAuthenticated ? (
@@ -148,12 +155,18 @@ export default function Profile() {
         {isAuthenticated && me && (
           <div style={{ display: "grid", gap: ".5rem", marginTop: "1rem" }}>
             <label style={{ display: "grid", gap: ".25rem" }}>
-              <span style={{ fontWeight: 700 }}>Email</span>
-              <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" />
+              <span style={{ fontWeight: 700 }}>Email *</span>
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+              />
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
-              <span style={{ fontWeight: 700 }}>Username</span>
-              <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="yourname" />
+              <span style={{ fontWeight: 700 }}>Username *</span>
+              <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="yourname" />
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Name</span>
@@ -168,9 +181,16 @@ export default function Profile() {
               />
             </label>
 
-            <button className="auth-btn primary" onClick={() => void saveMe()} disabled={saving}>
+            <button
+              className="auth-btn primary"
+              onClick={() => void saveMe()}
+              disabled={saving || !email.trim() || !username.trim()}
+            >
               {saving ? "Saving…" : "Save profile"}
             </button>
+            {(!email.trim() || !username.trim()) && (
+              <div className="auth-mono">Email and username are required.</div>
+            )}
           </div>
         )}
       </div>
