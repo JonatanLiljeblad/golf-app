@@ -403,3 +403,44 @@ button.player-slot.add:disabled {
   background: rgba(255, 255, 255, 0.08);
   font-weight: 800;
 }
+
+.scorecard-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.scorecard-table th,
+.scorecard-table td {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.45rem 0.5rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.scorecard-table th:first-child,
+.scorecard-table td:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: rgba(11, 15, 25, 0.9);
+}
+
+.scorecard-holelink {
+  border: 0;
+  background: transparent;
+  color: rgba(230, 237, 243, 0.9);
+  font: inherit;
+  font-weight: 900;
+  cursor: pointer;
+  padding: 0.1rem 0.25rem;
+  border-radius: 8px;
+}
+
+.scorecard-holelink:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.scorecard-holelink:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 93, 255, 0.22);
+}

@@ -52,12 +52,39 @@ export default function RoundScorecard() {
   const [padPage, setPadPage] = useState<1 | 2>(1);
 
   const holes = round?.holes ?? [];
+  const front9 = holes.filter((h) => h.number <= 9);
+  const back9 = holes.filter((h) => h.number >= 10);
   const activeHole = holes.find((h) => h.number === activeHoleNumber) ?? holes[0] ?? null;
 
   const canEdit = (pid: string) => !round?.completed_at && !tournamentLocked && (pid === viewerId || isOwner);
+  const isParticipant = !!round && !!viewerId && round.player_ids.includes(viewerId);
+  const readOnlyTournamentGroup = !!round?.tournament_id && !isOwner && !isParticipant;
+
+  const [viewMode, setViewMode] = useState<"hole" | "scorecard">(readOnlyTournamentGroup ? "scorecard" : "hole");
+
+  useEffect(() => {
+    if (readOnlyTournamentGroup) setViewMode("scorecard");
+  }, [readOnlyTournamentGroup]);
+
+  function sumPar(hs: typeof holes) {
+    return hs.reduce((acc, h) => acc + h.par, 0);
+  }
+
+  function sumStrokes(pid: string, hs: typeof holes) {
+    let total = 0;
+    let any = false;
+    for (const h of hs) {
+      const v = h.strokes?.[pid] ?? null;
+      if (v != null) {
+        total += v;
+        any = true;
+      }
+    }
+    return any ? total : null;
+  }
 
   async function submitScore(holeNumber: number, playerId: string, strokes: number) {
-    if (!round || round.completed_at || tournamentLocked) return;
+    if (!round || round.completed_at || tournamentLocked || readOnlyTournamentGroup) return;
     setError(null);
     try {
       await request(`/api/v1/rounds/${round.id}/scores`, {
@@ -223,7 +250,145 @@ export default function RoundScorecard() {
                 </div>
               )}
 
-              {activeHole && (
+              {!readOnlyTournamentGroup && (
+                <div className="auth-row" style={{ justifyContent: "flex-end" }}>
+                  <button
+                    className={viewMode === "hole" ? "auth-btn primary" : "auth-btn secondary"}
+                    onClick={() => setViewMode("hole")}
+                    disabled={!!round.completed_at || tournamentLocked}
+                  >
+                    Input
+                  </button>
+                  <button
+                    className={viewMode === "scorecard" ? "auth-btn primary" : "auth-btn secondary"}
+                    onClick={() => setViewMode("scorecard")}
+                  >
+                    Scorecard
+                  </button>
+                </div>
+              )}
+
+              {(viewMode === "scorecard" || readOnlyTournamentGroup) && (
+                <div style={{ display: "grid", gap: ".75rem" }}>
+                  <div className="table-scroll">
+                    <table className="scorecard-table">
+                      <thead>
+                        <tr>
+                          <th className="auth-mono" style={{ textAlign: "left" }}>Player</th>
+                          {front9.map((h) => (
+                            <th key={`h${h.number}`}>
+                              <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
+                                {h.number}
+                              </button>
+                            </th>
+                          ))}
+                          <th className="auth-mono">Out</th>
+                          {back9.map((h) => (
+                            <th key={`h${h.number}`}>
+                              <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
+                                {h.number}
+                              </button>
+                            </th>
+                          ))}
+                          <th className="auth-mono">In</th>
+                          <th className="auth-mono">Tot</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td className="auth-mono">Par</td>
+                          {front9.map((h) => (
+                            <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
+                          ))}
+                          <td className="auth-mono">{front9.length ? sumPar(front9) : "—"}</td>
+                          {back9.map((h) => (
+                            <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
+                          ))}
+                          <td className="auth-mono">{back9.length ? sumPar(back9) : "—"}</td>
+                          <td className="auth-mono">{holes.length ? sumPar(holes) : "—"}</td>
+                        </tr>
+
+                        {round.player_ids.map((pid) => {
+                          const out = sumStrokes(pid, front9);
+                          const inn = sumStrokes(pid, back9);
+                          const tot = sumStrokes(pid, holes);
+                          return (
+                            <tr key={`p-${pid}`}>
+                              <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>{playerLabel[pid] ?? pid}</td>
+                              {front9.map((h) => (
+                                <td key={`${pid}-${h.number}`}>{h.strokes?.[pid] ?? ""}</td>
+                              ))}
+                              <td className="auth-mono">{out ?? "—"}</td>
+                              {back9.map((h) => (
+                                <td key={`${pid}-${h.number}`}>{h.strokes?.[pid] ?? ""}</td>
+                              ))}
+                              <td className="auth-mono">{inn ?? "—"}</td>
+                              <td className="auth-mono">{tot ?? "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {activeHole && (
+                    <div className="scorecard-hole" style={{ display: "grid", gap: ".75rem" }}>
+                      <div className="scorecard-hole__header">
+                        <div>
+                          <div style={{ fontWeight: 900 }}>Hole {activeHole.number} / {holes.length}</div>
+                          <div className="auth-mono">
+                            Par {activeHole.par}
+                            {activeHole.distance != null ? ` · ${activeHole.distance}m` : ""}
+                            {activeHole.hcp != null ? ` · HCP ${activeHole.hcp}` : ""}
+                          </div>
+                        </div>
+                        <div className="scorecard-hole__nav">
+                          <button
+                            className="auth-btn secondary"
+                            onClick={() => {
+                              const idx = holes.findIndex((h) => h.number === activeHole.number);
+                              const prev = idx > 0 ? holes[idx - 1] : null;
+                              if (prev) setActiveHoleNumber(prev.number);
+                            }}
+                            disabled={holes.findIndex((h) => h.number === activeHole.number) <= 0}
+                          >
+                            Prev
+                          </button>
+                          <button
+                            className="auth-btn secondary"
+                            onClick={() => {
+                              const idx = holes.findIndex((h) => h.number === activeHole.number);
+                              const next = idx >= 0 ? holes[idx + 1] : null;
+                              if (next) setActiveHoleNumber(next.number);
+                            }}
+                            disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1}
+                          >
+                            Next
+                          </button>
+                          {!readOnlyTournamentGroup && (
+                            <button className="auth-btn primary" onClick={() => setViewMode("hole")}>Input</button>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="scorecard-hole__summary">
+                        {round.player_ids.map((pid) => (
+                          <div key={`sum-${pid}`} className="scorecard-hole__summaryItem">
+                            <div className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {playerLabel[pid] ?? pid}
+                            </div>
+                            <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
+                              {activeHole.strokes?.[pid] ?? "—"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {viewMode === "hole" && !readOnlyTournamentGroup && activeHole && (
                 <div className="scorecard-hole" style={{ display: "grid", gap: ".75rem" }}>
                   <div className="scorecard-hole__header">
                     <div>
