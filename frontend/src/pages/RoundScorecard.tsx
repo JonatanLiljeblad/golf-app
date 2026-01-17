@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
@@ -37,6 +37,25 @@ export default function RoundScorecard() {
   const isOwner = !!round && viewerId && round.owner_id === viewerId;
   const tournamentLocked = !!round?.tournament_completed_at || !!round?.tournament_paused_at;
 
+  const playerLabel = useMemo(() => {
+    const map: Record<string, string> = {};
+    if (!round) return map;
+    for (const pid of round.player_ids) {
+      const meta = round.players?.find((p) => p.external_id === pid);
+      map[pid] = pid === viewerId ? "You" : meta?.username ?? meta?.name ?? meta?.email ?? pid;
+    }
+    return map;
+  }, [round, viewerId]);
+
+  const [activePlayerId, setActivePlayerId] = useState<string>(viewerId);
+  const [activeHoleNumber, setActiveHoleNumber] = useState<number>(1);
+  const [padPage, setPadPage] = useState<1 | 2>(1);
+
+  const holes = round?.holes ?? [];
+  const activeHole = holes.find((h) => h.number === activeHoleNumber) ?? holes[0] ?? null;
+
+  const canEdit = (pid: string) => !round?.completed_at && !tournamentLocked && (pid === viewerId || isOwner);
+
   async function submitScore(holeNumber: number, playerId: string, strokes: number) {
     if (!round || round.completed_at || tournamentLocked) return;
     setError(null);
@@ -46,6 +65,11 @@ export default function RoundScorecard() {
         body: JSON.stringify({ hole_number: holeNumber, strokes, player_id: playerId }),
       });
       await load(round.id);
+
+      // Friendly UX: move to next hole after entering a score.
+      const idx = holes.findIndex((h) => h.number === holeNumber);
+      const next = idx >= 0 ? holes[idx + 1] : null;
+      if (next) setActiveHoleNumber(next.number);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to submit score (${err.status}).`);
@@ -97,6 +121,26 @@ export default function RoundScorecard() {
     void load(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, roundId]);
+
+  useEffect(() => {
+    if (!round) return;
+
+    // Keep selected player valid.
+    if (!round.player_ids.includes(activePlayerId)) {
+      setActivePlayerId(viewerId && round.player_ids.includes(viewerId) ? viewerId : round.player_ids[0] ?? "");
+    }
+
+    // Start on the first hole without a score for the active player (fallback to first hole).
+    const pid = (activePlayerId && round.player_ids.includes(activePlayerId))
+      ? activePlayerId
+      : (viewerId && round.player_ids.includes(viewerId) ? viewerId : round.player_ids[0]);
+    const firstOpen = pid
+      ? round.holes.find((h) => (h.strokes?.[pid] ?? null) == null)
+      : null;
+    const preferred = firstOpen?.number ?? round.holes[0]?.number ?? 1;
+    if (!round.holes.some((h) => h.number === activeHoleNumber)) setActiveHoleNumber(preferred);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [round?.id]);
 
   if (!isAuthenticated) {
     return (
@@ -179,59 +223,102 @@ export default function RoundScorecard() {
                 </div>
               )}
 
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: `80px 70px 90px 70px repeat(${round.player_ids.length}, 1fr)`,
-
-                  gap: ".5rem",
-                  alignItems: "center",
-                }}
-              >
-                <div className="auth-mono">Hole</div>
-                <div className="auth-mono">Par</div>
-                <div className="auth-mono">Dist</div>
-                <div className="auth-mono">HCP</div>
-                {round.player_ids.map((pid) => {
-                  const meta = round.players?.find((p) => p.external_id === pid);
-                  const label =
-                    pid === viewerId
-                      ? "You"
-                      : meta?.username ?? meta?.name ?? meta?.email ?? pid;
-                  return (
-                    <div key={pid} className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {label}
+              {activeHole && (
+                <div className="scorecard-hole" style={{ display: "grid", gap: ".75rem" }}>
+                  <div className="scorecard-hole__header">
+                    <div>
+                      <div style={{ fontWeight: 900 }}>Hole {activeHole.number} / {holes.length}</div>
+                      <div className="auth-mono">
+                        Par {activeHole.par}
+                        {activeHole.distance != null ? ` · ${activeHole.distance}m` : ""}
+                        {activeHole.hcp != null ? ` · HCP ${activeHole.hcp}` : ""}
+                      </div>
                     </div>
-                  );
-                })}
-
-                {round.holes.map((h) => (
-                  <div key={h.number} style={{ display: "contents" }}>
-                    <div className="auth-mono">{h.number}</div>
-                    <div className="auth-mono">{h.par}</div>
-                    <div className="auth-mono">{h.distance ?? "—"}</div>
-                    <div className="auth-mono">{h.hcp ?? "—"}</div>
-                    {round.player_ids.map((pid) => {
-                      const canEdit = !round.completed_at && !tournamentLocked && (pid === viewerId || isOwner);
-                      return (
-                        <input
-                          key={`${h.number}-${pid}`}
-                          type="number"
-                          min={1}
-                          max={30}
-                          defaultValue={h.strokes[pid] ?? ""}
-                          placeholder="strokes"
-                          disabled={!canEdit}
-                          onBlur={(e) => {
-                            const v = Number(e.target.value);
-                            if (Number.isFinite(v) && v > 0) void submitScore(h.number, pid, v);
-                          }}
-                        />
-                      );
-                    })}
+                    <div className="scorecard-hole__nav">
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => {
+                          const idx = holes.findIndex((h) => h.number === activeHole.number);
+                          const prev = idx > 0 ? holes[idx - 1] : null;
+                          if (prev) setActiveHoleNumber(prev.number);
+                        }}
+                        disabled={holes.findIndex((h) => h.number === activeHole.number) <= 0}
+                      >
+                        Prev
+                      </button>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => {
+                          const idx = holes.findIndex((h) => h.number === activeHole.number);
+                          const next = idx >= 0 ? holes[idx + 1] : null;
+                          if (next) setActiveHoleNumber(next.number);
+                        }}
+                        disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1}
+                      >
+                        Next
+                      </button>
+                    </div>
                   </div>
-                ))}
-              </div>
+
+                  <div className="scorecard-players">
+                    {round.player_ids.map((pid) => (
+                      <button
+                        key={pid}
+                        className={activePlayerId === pid ? "auth-btn primary" : "auth-btn secondary"}
+                        onClick={() => setActivePlayerId(pid)}
+                        title={!canEdit(pid) ? "Only the round owner can enter scores for others" : undefined}
+                      >
+                        {playerLabel[pid] ?? pid}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="scorecard-hole__summary">
+                    {round.player_ids.map((pid) => (
+                      <div key={`sum-${pid}`} className="scorecard-hole__summaryItem">
+                        <div className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {playerLabel[pid] ?? pid}
+                        </div>
+                        <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
+                          {activeHole.strokes?.[pid] ?? "—"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="scorepad">
+                    <div className="auth-mono" style={{ marginBottom: ".25rem" }}>
+                      Enter strokes for <span style={{ fontWeight: 900 }}>{playerLabel[activePlayerId] ?? activePlayerId}</span>
+                    </div>
+
+                    <div className="scorepad-grid">
+                      {(padPage === 1 ? [1, 2, 3, 4, 5, 6, 7, 8, 9] : [10, 11, 12, 13, 14, 15, 16, 17, 18]).map(
+                        (n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className="scorepad-btn"
+                            disabled={!canEdit(activePlayerId)}
+                            onClick={() => void submitScore(activeHole.number, activePlayerId, n)}
+                          >
+                            {n}
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        className="scorepad-btn secondary"
+                        onClick={() => setPadPage(padPage === 1 ? 2 : 1)}
+                      >
+                        {padPage === 1 ? ">" : "<"}
+                      </button>
+                    </div>
+                    <div className="auth-mono" style={{ marginTop: ".5rem" }}>
+                      Tip: tap a number to save it (auto-advances to the next hole).
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>

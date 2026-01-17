@@ -332,3 +332,74 @@ button.player-slot.add:disabled {
   width: 100%;
   max-width: 520px;
 }
+
+/* Round scorecard: single-hole + numpad */
+.scorecard-hole__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.scorecard-hole__nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.scorecard-players {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.scorecard-hole__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.6rem;
+}
+
+.scorecard-hole__summaryItem {
+  padding: 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.scorepad {
+  padding: 0.75rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.scorepad-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.scorepad-btn {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 1rem 0.9rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-weight: 900;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.scorepad-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.scorepad-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.scorepad-btn.secondary {
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 800;
+}
