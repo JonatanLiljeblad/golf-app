@@ -67,12 +67,15 @@ export default function RoundScorecard() {
   const isParticipant = !!round && !!viewerId && round.player_ids.includes(viewerId);
   const readOnlyTournamentGroup = !!round?.tournament_id && !isOwner && !isParticipant;
 
+  const isActivePar3 = activeHole?.par === 3;
+
   const activeSavedStrokes = activeHole ? (activeHole.strokes?.[activePlayerId] ?? null) : null;
   const activeSavedPutts = activeHole ? (activeHole.putts?.[activePlayerId] ?? null) : null;
   const activeSavedFairway = activeHole ? (activeHole.fairway?.[activePlayerId] ?? null) : null;
   const activeSavedGir = activeHole ? (activeHole.gir?.[activePlayerId] ?? null) : null;
   const activeSavedComplete =
-    activeSavedStrokes != null && (!statsEnabled || (activeSavedPutts != null && !!activeSavedFairway && !!activeSavedGir));
+    activeSavedStrokes != null &&
+    (!statsEnabled || (activeSavedPutts != null && !!activeSavedGir && (isActivePar3 || !!activeSavedFairway)));
   const blockHoleAdvance = statsEnabled && canEdit(activePlayerId) && !activeSavedComplete;
 
   const [viewMode, setViewMode] = useState<"hole" | "scorecard">(readOnlyTournamentGroup ? "scorecard" : "hole");
@@ -80,6 +83,10 @@ export default function RoundScorecard() {
   useEffect(() => {
     if (readOnlyTournamentGroup) setViewMode("scorecard");
   }, [readOnlyTournamentGroup]);
+
+  useEffect(() => {
+    if (round?.completed_at) setViewMode("scorecard");
+  }, [round?.completed_at]);
 
   useEffect(() => {
     if (!activeHole) return;
@@ -634,23 +641,25 @@ export default function RoundScorecard() {
                           </div>
                         </div>
 
-                        <div>
-                          <div className="auth-mono" style={{ marginBottom: ".35rem" }}>Fairway</div>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: ".6rem" }}>
-                            {["left", "hit", "right", "short"].map((v) => (
-                              <button
-                                key={`f-${v}`}
-                                type="button"
-                                className="scorepad-btn"
-                                style={draftFairway === v ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
-                                disabled={!canEdit(activePlayerId)}
-                                onClick={() => setDraftFairway(v)}
-                              >
-                                {v === "hit" ? "Hit" : v}
-                              </button>
-                            ))}
+                        {!isActivePar3 && (
+                          <div>
+                            <div className="auth-mono" style={{ marginBottom: ".35rem" }}>Fairway</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: ".6rem" }}>
+                              {["left", "hit", "right", "short"].map((v) => (
+                                <button
+                                  key={`f-${v}`}
+                                  type="button"
+                                  className="scorepad-btn"
+                                  style={draftFairway === v ? { background: "rgba(255, 255, 255, 0.12)", borderColor: "rgba(255, 255, 255, 0.35)" } : undefined}
+                                  disabled={!canEdit(activePlayerId)}
+                                  onClick={() => setDraftFairway(v)}
+                                >
+                                  {v === "hit" ? "Hit" : v}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
+                        )}
 
                         <div>
                           <div className="auth-mono" style={{ marginBottom: ".35rem" }}>GIR</div>
@@ -676,14 +685,14 @@ export default function RoundScorecard() {
                             !canEdit(activePlayerId) ||
                             draftStrokes == null ||
                             draftPutts == null ||
-                            !draftFairway ||
+                            (!isActivePar3 && !draftFairway) ||
                             !draftGir
                           }
                           onClick={() =>
                             draftStrokes != null
                               ? void submitScore(activeHole.number, activePlayerId, draftStrokes, {
                                   putts: draftPutts,
-                                  fairway: draftFairway,
+                                  fairway: isActivePar3 ? null : draftFairway,
                                   gir: draftGir,
                                 })
                               : undefined

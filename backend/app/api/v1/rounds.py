@@ -314,10 +314,15 @@ def submit_score(
     allowed_fairway = {"left", "hit", "right", "short"}
     allowed_gir = {"left", "hit", "right", "short", "long"}
 
+    hole_par_by_number = {h.number: h.par for h in rnd.course.holes}
+    hole_par = hole_par_by_number.get(payload.hole_number)
+
     if rnd.stats_enabled:
-        if payload.putts is None or payload.fairway is None or payload.gir is None:
-            raise HTTPException(status_code=400, detail="putts, fairway, and gir are required when stats are enabled")
-        if payload.fairway not in allowed_fairway:
+        if payload.putts is None or payload.gir is None:
+            raise HTTPException(status_code=400, detail="putts and gir are required when stats are enabled")
+        if hole_par != 3 and payload.fairway is None:
+            raise HTTPException(status_code=400, detail="fairway is required on non-par-3 holes when stats are enabled")
+        if payload.fairway is not None and payload.fairway not in allowed_fairway:
             raise HTTPException(status_code=400, detail="Invalid fairway value")
         if payload.gir not in allowed_gir:
             raise HTTPException(status_code=400, detail="Invalid gir value")
@@ -367,7 +372,7 @@ def submit_score(
             have = {
                 (pid, hn)
                 for (pid, hn, p, f, g) in existing
-                if p is not None and f is not None and g is not None
+                if p is not None and g is not None and (hole_par_by_number.get(hn) == 3 or f is not None)
             }
 
         need = {(pid, hn) for pid in participant_ids for hn in valid_numbers}
