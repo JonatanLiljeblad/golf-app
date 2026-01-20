@@ -26,6 +26,7 @@ export default function Courses() {
   const [name, setName] = useState("");
   const [holesCount, setHolesCount] = useState<9 | 18>(9);
   const [holes, setHoles] = useState(() => mkHoles(9));
+  const [createModalOpen, setCreateModalOpen] = useState(false);
 
   useEffect(() => {
     setHoles(mkHoles(holesCount));
@@ -61,6 +62,7 @@ export default function Courses() {
       setCourses((prev) => [...prev, created]);
       setName("");
       setHoles(mkHoles(holesCount));
+      setCreateModalOpen(false);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to create course (${err.status}).`);
@@ -104,9 +106,20 @@ export default function Courses() {
     <div className="page content-narrow">
       <div className="page-header">
         <h1 style={{ margin: 0 }}>Courses</h1>
-        <button className="auth-btn secondary" onClick={() => void load()}>
-          Refresh
-        </button>
+        <div className="auth-row" style={{ gap: ".5rem" }}>
+          <button
+            className="auth-btn primary"
+            onClick={() => {
+              setError(null);
+              setCreateModalOpen(true);
+            }}
+          >
+            Create course
+          </button>
+          <button className="auth-btn secondary" onClick={() => void load()}>
+            Refresh
+          </button>
+        </div>
       </div>
 
       {loading && <div className="auth-mono">{loading}</div>}
@@ -117,104 +130,125 @@ export default function Courses() {
         </div>
       )}
 
-      <div className="auth-card" style={{ margin: 0, maxWidth: "none", display: "grid", gap: ".75rem" }}>
-        <div style={{ fontWeight: 800 }}>Create a course</div>
+      {createModalOpen && (
+        <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setCreateModalOpen(false)}>
+          <div className="auth-card modal-card modal-card--wide" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+              <div style={{ fontWeight: 900 }}>Create course</div>
+              <button className="auth-btn secondary" style={{ padding: ".45rem .7rem" }} onClick={() => setCreateModalOpen(false)}>
+                Close
+              </button>
+            </div>
 
-        <label style={{ display: "grid", gap: ".25rem" }}>
-          <span style={{ fontWeight: 700 }}>Name</span>
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Home Course" />
-        </label>
+            <div className="course-create" style={{ marginTop: ".75rem" }}>
+              <label style={{ display: "grid", gap: ".25rem" }}>
+                <span style={{ fontWeight: 700 }}>Name</span>
+                <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Home Course" />
+              </label>
 
-        <label style={{ display: "grid", gap: ".25rem" }}>
-          <span style={{ fontWeight: 700 }}>Holes</span>
-          <select value={holesCount} onChange={(e) => setHolesCount(Number(e.target.value) as 9 | 18)}>
-            <option value={9}>9</option>
-            <option value={18}>18</option>
-          </select>
-        </label>
+              <div className="auth-row" style={{ justifyContent: "space-between", alignItems: "flex-end", gap: ".75rem" }}>
+                <label style={{ display: "grid", gap: ".25rem", minWidth: 140 }}>
+                  <span style={{ fontWeight: 700 }}>Holes</span>
+                  <select value={holesCount} onChange={(e) => setHolesCount(Number(e.target.value) as 9 | 18)}>
+                    <option value={9}>9</option>
+                    <option value={18}>18</option>
+                  </select>
+                </label>
+                <div className="auth-mono">Total par: {totalPar}</div>
+              </div>
 
-        <div className="auth-mono">Total par: {totalPar}</div>
+              <div className="course-holes-scroll">
+                <div className="course-holes">
+                  {holes.map((h, idx) => (
+                    <div key={h.number} className="course-hole">
+                    <div className="course-hole__num">{h.number}</div>
 
-        <div style={{ display: "grid", gap: ".5rem" }}>
-          {holes.map((h, idx) => (
-            <div
-              key={h.number}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                gap: ".75rem",
-                alignItems: "center",
-              }}
-            >
-              <div className="auth-mono">Hole {h.number}</div>
-              <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={h.par}
-                  onChange={(e) => {
-                    const v = Number(e.target.value);
-                    setHoles((prev) => {
-                      const next = [...prev];
-                      next[idx] = { ...next[idx], par: Number.isFinite(v) && v > 0 ? v : next[idx].par };
-                      return next;
-                    });
-                  }}
-                  style={{ width: 90 }}
-                  aria-label={`Hole ${h.number} par`}
-                />
-                <input
-                  type="number"
-                  min={1}
-                  max={2000}
-                  value={h.distance ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const v = raw === "" ? null : Number(raw);
-                    setHoles((prev) => {
-                      const next = [...prev];
-                      next[idx] = { ...next[idx], distance: v != null && Number.isFinite(v) && v > 0 ? v : null };
-                      return next;
-                    });
-                  }}
-                  style={{ width: 110 }}
-                  placeholder="Dist"
-                  aria-label={`Hole ${h.number} distance`}
-                />
-                <select
-                  value={h.hcp ?? ""}
-                  onChange={(e) => {
-                    const raw = e.target.value;
-                    const v = raw === "" ? null : Number(raw);
-                    setHoles((prev) => {
-                      const next = [...prev];
-                      next[idx] = { ...next[idx], hcp: v };
-                      return next;
-                    });
-                  }}
-                  style={{ width: 90 }}
-                  aria-label={`Hole ${h.number} handicap`}
-                >
-                  <option value="">HCP</option>
-                  {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => {
-                    const usedElsewhere = holes.some((x, j) => j !== idx && x.hcp === n);
-                    return (
-                      <option key={n} value={n} disabled={usedElsewhere}>
-                        {n}
-                      </option>
-                    );
-                  })}
-                </select>
+                    <label style={{ display: "grid", gap: ".25rem" }}>
+                      <span className="auth-mono">Par</span>
+                      <select
+                        value={h.par}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          setHoles((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], par: v };
+                            return next;
+                          });
+                        }}
+                        aria-label={`Hole ${h.number} par`}
+                      >
+                        {[3, 4, 5].map((p) => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    <label style={{ display: "grid", gap: ".25rem" }}>
+                      <span className="auth-mono">Dist</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={2000}
+                        value={h.distance ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const v = raw === "" ? null : Number(raw);
+                          setHoles((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], distance: v != null && Number.isFinite(v) && v > 0 ? v : null };
+                            return next;
+                          });
+                        }}
+                        placeholder="yd"
+                        aria-label={`Hole ${h.number} distance`}
+                      />
+                    </label>
+
+                    <label style={{ display: "grid", gap: ".25rem" }}>
+                      <span className="auth-mono">HCP</span>
+                      <select
+                        value={h.hcp ?? ""}
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          const v = raw === "" ? null : Number(raw);
+                          setHoles((prev) => {
+                            const next = [...prev];
+                            next[idx] = { ...next[idx], hcp: v };
+                            return next;
+                          });
+                        }}
+                        aria-label={`Hole ${h.number} handicap`}
+                      >
+                        <option value="">—</option>
+                        {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => {
+                          const usedElsewhere = holes.some((x, j) => j !== idx && x.hcp === n);
+                          return (
+                            <option key={n} value={n} disabled={usedElsewhere}>
+                              {n}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="auth-row" style={{ justifyContent: "space-between", marginTop: ".75rem" }}>
+                <button className="auth-btn secondary" onClick={() => setCreateModalOpen(false)}>
+                  Cancel
+                </button>
+                <button className="auth-btn primary" disabled={!name.trim() || !!loading} onClick={() => void createCourse()}>
+                  Create
+                </button>
               </div>
             </div>
-          ))}
+          </div>
         </div>
-
-        <button className="auth-btn primary" disabled={!name.trim() || !!loading} onClick={() => void createCourse()}>
-          Create course
-        </button>
-      </div>
+      )}
 
       {!courses.length && !loading ? (
         <div className="auth-card">

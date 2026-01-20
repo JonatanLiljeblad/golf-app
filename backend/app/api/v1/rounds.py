@@ -141,7 +141,11 @@ def create_round(
 
     active = db.execute(
         select(Round.id)
-        .where(Round.owner_player_id == owner.id, Round.completed_at.is_(None))
+        .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
+        .where(
+            Round.completed_at.is_(None),
+            or_(Round.owner_player_id == owner.id, RoundParticipant.player_id == owner.id),
+        )
         .limit(1)
     ).first()
     if active:
@@ -165,6 +169,19 @@ def create_round(
             p = _resolve_player_ref(db, ref)
             if p.id == owner.id:
                 raise HTTPException(status_code=400, detail="You are already in the round")
+
+            active_other = db.execute(
+                select(Round.id)
+                .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
+                .where(
+                    Round.completed_at.is_(None),
+                    or_(Round.owner_player_id == p.id, RoundParticipant.player_id == p.id),
+                )
+                .limit(1)
+            ).first()
+            if active_other:
+                raise HTTPException(status_code=409, detail="Player already has an active round")
+
             if p.id not in {x.id for x in players}:
                 players.append(p)
 
@@ -236,6 +253,19 @@ def add_round_participants(
         raise HTTPException(status_code=400, detail="max 4 players")
 
     for p in to_add:
+        active_other = db.execute(
+            select(Round.id)
+            .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
+            .where(
+                Round.completed_at.is_(None),
+                Round.id != rnd.id,
+                or_(Round.owner_player_id == p.id, RoundParticipant.player_id == p.id),
+            )
+            .limit(1)
+        ).first()
+        if active_other:
+            raise HTTPException(status_code=409, detail="Player already has an active round")
+
         db.add(RoundParticipant(round_id=rnd.id, player_id=p.id))
 
     try:
@@ -397,20 +427,21 @@ def list_rounds(
     db: Session = Depends(get_db),
     user_id: str = Depends(get_current_user_id),
 ):
-    owner = ensure_player(db, user_id)
+    player = ensure_player(db, user_id)
     rounds = db.execute(
         select(Round)
+        .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
         .options(
             joinedload(Round.owner),
             joinedload(Round.course).joinedload(Course.holes),
             joinedload(Round.participants).joinedload(RoundParticipant.player),
             joinedload(Round.scores).joinedload(HoleScore.player),
         )
-        .where(Round.owner_player_id == owner.id)
+        .where(or_(Round.owner_player_id == player.id, RoundParticipant.player_id == player.id))
         .order_by(Round.started_at.desc(), Round.id.desc())
     ).scalars().unique().all()
 
-    return [_round_to_summary(r) for r in rounds]
+    return [_round_to_summary(r, player.external_id) for r in rounds]
 
 
 @router.get(
@@ -446,7 +477,7 @@ def _compute_totals(
     return total_par, owner_total, totals_by_player
 
 
-def _round_to_summary(rnd: Round) -> RoundSummaryOut:
+def _round_to_summary(rnd: Round, viewer_external_id: str) -> RoundSummaryOut:
     participant_ids = [p.player.external_id for p in rnd.participants] or [rnd.owner.external_id]
 
     if rnd.course is None:
@@ -463,9 +494,10 @@ def _round_to_summary(rnd: Round) -> RoundSummaryOut:
             players_count=len(participant_ids),
         )
 
-    total_par, owner_total, _ = _compute_totals(
+    total_par, _, totals_by_player = _compute_totals(
         rnd.course, participant_ids, rnd.scores, rnd.owner.external_id
     )
+    viewer_total = totals_by_player.get(viewer_external_id)
     return RoundSummaryOut(
         id=rnd.id,
         course_id=rnd.course_id,
@@ -474,7 +506,7 @@ def _round_to_summary(rnd: Round) -> RoundSummaryOut:
         started_at=rnd.started_at,
         completed_at=rnd.completed_at,
         total_par=total_par,
-        total_strokes=owner_total,
+        total_strokes=viewer_total,
         players_count=len(participant_ids),
     )
 

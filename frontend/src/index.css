@@ -190,7 +190,7 @@ textarea:disabled {
 
 .container {
   width: 100%;
-  max-width: 1100px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
@@ -235,8 +235,15 @@ textarea:disabled {
 }
 
 .table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow-x: visible;
+}
+
+@media (max-width: 900px) {
+  /* On small screens, allow horizontal scrolling rather than truncating */
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .auth-btn {
@@ -331,6 +338,57 @@ button.player-slot.add:disabled {
 .modal-card {
   width: 100%;
   max-width: 520px;
+  max-height: calc(100vh - 2rem);
+  overflow: hidden;
+}
+
+.modal-card--wide {
+  max-width: 860px;
+}
+
+/* Courses: create course modal */
+.course-create {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.course-holes-scroll {
+  max-height: min(58vh, 620px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 0.25rem;
+}
+
+.course-holes {
+  display: grid;
+  gap: 0.6rem;
+}
+
+@media (min-width: 720px) {
+  .course-holes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.course-hole {
+  display: grid;
+  grid-template-columns: 38px repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+  align-items: end;
+  padding: 0.65rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.course-hole__num {
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: grid;
+  place-items: center;
+  font-weight: 900;
 }
 
 /* Round scorecard: single-hole + numpad */
@@ -357,6 +415,10 @@ button.player-slot.add:disabled {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 0.6rem;
+}
+
+.scorecard-hole__summaryItem .score-mark {
+  margin-bottom: 0.55rem;
 }
 
 .scorecard-hole__summaryItem {
@@ -404,25 +466,134 @@ button.player-slot.add:disabled {
   font-weight: 800;
 }
 
+.scorecard-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.scorecard-footer {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.16);
+}
+
+.scorecard-stats {
+  padding: 1rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.scorecard-stats__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.scorecard-stats__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+}
+
+.scorecard-stats__item {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.75rem;
+}
+
+.scorecard-stats__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: rgba(230, 237, 243, 0.82);
+}
+
+.scorecard-stats__metrics {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.scorecard-stats__metric {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.14);
+  padding: 0.5rem 0.55rem;
+  text-align: center;
+}
+
+.scorecard-footer__item {
+  min-width: 140px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .scorecard-footer {
+    flex-wrap: wrap;
+    gap: 0.75rem;
+  }
+
+  .scorecard-footer__item {
+    min-width: 120px;
+  }
+}
+
 .scorecard-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 
 .scorecard-table th,
 .scorecard-table td {
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.45rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.5rem 0.45rem;
   text-align: center;
-  background: rgba(255, 255, 255, 0.02);
+  background: transparent;
+  font-size: 0.98rem;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.scorecard-table thead th {
+  background: rgba(37, 160, 95, 0.28);
+  border-color: rgba(37, 160, 95, 0.28);
+  font-weight: 900;
 }
 
 .scorecard-table th:first-child,
 .scorecard-table td:first-child {
   text-align: left;
-  position: sticky;
-  left: 0;
-  background: rgba(11, 15, 25, 0.9);
+  background: rgba(0, 0, 0, 0.18);
+  width: 170px;
+}
+
+.scorecard-table th:first-child {
+  background: rgba(37, 160, 95, 0.28);
+}
+
+/* make the scorecard fit without horizontal scrolling on desktop */
+.scorecard-table th:not(:first-child),
+.scorecard-table td:not(:first-child) {
+  width: calc((100% - 170px) / 11);
+}
+
+@media (max-width: 900px) {
+  .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .scorecard-holelink {
@@ -444,3 +615,53 @@ button.player-slot.add:disabled {
   outline: none;
   box-shadow: 0 0 0 3px rgba(99, 93, 255, 0.22);
 }
+
+/* Scorecard: golf-style score markings */
+.score-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6em;
+  height: 1.6em;
+  line-height: 1;
+  font-weight: 900;
+  position: relative;
+}
+
+.score-mark.birdie {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+}
+
+.score-mark.eagle {
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+}
+
+.score-mark.eagle::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: inherit;
+}
+
+.score-mark.bogey {
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+}
+
+.score-mark.double-bogey {
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-radius: 6px;
+}
+
+.score-mark.double-bogey::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border: 2px solid rgba(255, 255, 255, 0.8);
+  border-radius: inherit;
+}
+
+

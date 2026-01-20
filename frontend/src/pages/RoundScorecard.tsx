@@ -2,9 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
-import type { Round } from "../api/types";
+import { ScoreMark } from "../components/ScoreMark";
+import type { Player, Round } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
+
+function friendLabel(p: Player): string {
+  return p.name || p.username || p.email || p.external_id;
+}
+
 
 export default function RoundScorecard() {
   const { roundId } = useParams();
@@ -32,7 +38,17 @@ export default function RoundScorecard() {
     }
   }
 
-  const [inviteId, setInviteId] = useState("");
+  const [friends, setFriends] = useState<Player[]>([]);
+  const [friendFilter, setFriendFilter] = useState("");
+  const [selectedFriend, setSelectedFriend] = useState("");
+
+  const [addPlayerModalOpen, setAddPlayerModalOpen] = useState(false);
+  const [addPlayerView, setAddPlayerView] = useState<"menu" | "friend" | "search">("menu");
+
+  const [playerSearchQ, setPlayerSearchQ] = useState("");
+  const [playerSearchResults, setPlayerSearchResults] = useState<Player[]>([]);
+  const [playerSearchLoading, setPlayerSearchLoading] = useState<string | null>(null);
+  const [playerSearchMsg, setPlayerSearchMsg] = useState<string | null>(null);
 
   const isOwner = !!round && viewerId && round.owner_id === viewerId;
   const isTournamentRound = !!round?.tournament_id;
@@ -115,6 +131,24 @@ export default function RoundScorecard() {
     return any ? total : null;
   }
 
+  function sumDiff(pid: string, hs: typeof holes) {
+    let total = 0;
+    let any = false;
+    for (const h of hs) {
+      const v = h.strokes?.[pid] ?? null;
+      if (v != null) {
+        total += v - h.par;
+        any = true;
+      }
+    }
+    return any ? total : null;
+  }
+
+  function fmtDiff(d: number) {
+    if (d === 0) return "E";
+    return d > 0 ? `+${d}` : `${d}`;
+  }
+
   function sumPutts(pid: string, hs: typeof holes) {
     let total = 0;
     let any = false;
@@ -184,9 +218,40 @@ export default function RoundScorecard() {
     }
   }
 
-  async function addPlayer() {
+  async function loadFriends() {
+    try {
+      const data = await request<Player[]>("/api/v1/friends");
+      setFriends(data);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function searchPlayers() {
+    const needle = playerSearchQ.trim();
+    if (!needle) {
+      setPlayerSearchResults([]);
+      setPlayerSearchMsg(null);
+      return;
+    }
+
+    setPlayerSearchMsg(null);
+    setPlayerSearchLoading("Searching…");
+    try {
+      const data = await request<Player[]>(`/api/v1/players?q=${encodeURIComponent(needle)}`);
+      setPlayerSearchResults(data);
+      setPlayerSearchMsg(!data.length ? "No players found." : null);
+    } catch (e) {
+      const err = e as ApiError;
+      setPlayerSearchMsg(`Search failed (${err.status}).`);
+    } finally {
+      setPlayerSearchLoading(null);
+    }
+  }
+
+  async function addPlayer(ref: string) {
     if (!round || !isOwner || round.completed_at) return;
-    const pid = inviteId.trim();
+    const pid = ref.trim();
     if (!pid) return;
 
     setError(null);
@@ -195,11 +260,16 @@ export default function RoundScorecard() {
         method: "POST",
         body: JSON.stringify({ player_ids: [pid] }),
       });
-      setInviteId("");
       await load(round.id);
+      setAddPlayerModalOpen(false);
+      setAddPlayerView("menu");
+      setSelectedFriend("");
     } catch (e) {
       const err = e as ApiError;
-      const detail = err.body && typeof err.body === "object" && "detail" in err.body ? (err.body as { detail?: unknown }).detail : null;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
       const msg = detail != null ? String(detail) : null;
       setError(msg ? `${msg} (${err.status}).` : `Failed to add player (${err.status}).`);
     }
@@ -227,6 +297,7 @@ export default function RoundScorecard() {
       return;
     }
     void load(id);
+    void loadFriends();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, roundId]);
 
@@ -312,53 +383,158 @@ export default function RoundScorecard() {
             </div>
           )}
 
-          {round.completed_at && statsEnabled && (
-            <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
-              <div style={{ fontWeight: 800 }}>Statistics</div>
-              <div className="scorecard-hole__summary" style={{ marginTop: ".75rem" }}>
-                {round.player_ids.map((pid) => {
-                  const putts = sumPutts(pid, holes);
-                  const fir = countDir(pid, holes, "fairway", "hit");
-                  const gir = countDir(pid, holes, "gir", "hit");
-                  return (
-                    <div key={`stats-${pid}`} className="scorecard-hole__summaryItem">
-                      <div className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {playerLabel[pid] ?? pid}
-                      </div>
-                      <div className="auth-mono" style={{ marginTop: ".25rem" }}>
-                        Putts: {putts ?? "—"}
-                      </div>
-                      <div className="auth-mono">
-                        FIR: {fir.total ? `${Math.round((fir.hit / fir.total) * 100)}%` : "—"}
-                      </div>
-                      <div className="auth-mono">
-                        GIR: {gir.total ? `${Math.round((gir.hit / gir.total) * 100)}%` : "—"}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           <div className="auth-card" style={{ margin: 0, maxWidth: "none" }}>
             <div style={{ display: "grid", gap: ".75rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
-                <div className="auth-mono">Players: {round.player_ids.length} / 4</div>
-                {isOwner && !round.completed_at && (
-                  <div style={{ display: "flex", gap: ".5rem", alignItems: "center" }}>
-                    <input
-                      placeholder="Invite player (email, username, or Auth0 id)"
-                      value={inviteId}
-                      onChange={(e) => setInviteId(e.target.value)}
-                      style={{ width: 260 }}
-                    />
-                    <button className="auth-btn secondary" onClick={() => void addPlayer()} disabled={!inviteId.trim()}>
-                      Add
-                    </button>
+              <div className="auth-mono">Players: {round.player_ids.length} / 4</div>
+
+              <div className="player-slots">
+                {round.player_ids.map((pid) => (
+                  <div key={`pid-${pid}`} className="player-slot filled">
+                    <div style={{ fontWeight: 800 }}>{playerLabel[pid] ?? pid}</div>
+                    <div className="auth-mono">{pid}</div>
                   </div>
-                )}
+                ))}
+
+                {isOwner &&
+                  !round.completed_at &&
+                  Array.from({ length: Math.max(0, 4 - round.player_ids.length) }, (_, i) => (
+                    <button
+                      key={`empty-${i}`}
+                      type="button"
+                      className="player-slot add"
+                      onClick={() => {
+                        setAddPlayerView("menu");
+                        setAddPlayerModalOpen(true);
+                        setPlayerSearchMsg(null);
+                        setPlayerSearchResults([]);
+                        setPlayerSearchQ("");
+                      }}
+                      disabled={round.player_ids.length >= 4}
+                    >
+                      <div className="player-slot__plus">+</div>
+                      <div style={{ fontWeight: 800 }}>Add player</div>
+                    </button>
+                  ))}
               </div>
+
+              {addPlayerModalOpen && (
+                <div className="modal-backdrop" role="dialog" aria-modal="true" onClick={() => setAddPlayerModalOpen(false)}>
+                  <div className="auth-card modal-card" onClick={(e) => e.stopPropagation()}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+                      <div style={{ fontWeight: 900 }}>Add player</div>
+                      <button
+                        className="auth-btn secondary"
+                        style={{ padding: ".45rem .7rem" }}
+                        onClick={() => setAddPlayerModalOpen(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+
+                    {addPlayerView === "menu" && (
+                      <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                        <button className="auth-btn primary" onClick={() => setAddPlayerView("friend")}>
+                          Add a friend
+                        </button>
+                        <button className="auth-btn primary" onClick={() => setAddPlayerView("search")}>
+                          Search for a player
+                        </button>
+                      </div>
+                    )}
+
+                    {addPlayerView === "friend" && (
+                      <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                        <div className="auth-mono">Pick from your friends list.</div>
+                        <input value={friendFilter} onChange={(e) => setFriendFilter(e.target.value)} placeholder="Search your friends" />
+                        <select value={selectedFriend} onChange={(e) => setSelectedFriend(e.target.value)} disabled={!friends.length}>
+                          <option value="">Select friend…</option>
+                          {friends
+                            .filter((f) => {
+                              if (f.external_id === viewerId) return false;
+                              if (round.player_ids.includes(f.external_id)) return false;
+
+                              const q = friendFilter.trim().toLowerCase();
+                              if (!q) return true;
+                              const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
+                              return hay.includes(q);
+                            })
+                            .map((f) => (
+                              <option key={f.external_id} value={f.external_id}>
+                                {friendLabel(f)}
+                              </option>
+                            ))}
+                        </select>
+                        <div className="auth-row" style={{ justifyContent: "space-between" }}>
+                          <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                            Back
+                          </button>
+                          <button
+                            className="auth-btn primary"
+                            onClick={() => void addPlayer(selectedFriend)}
+                            disabled={!selectedFriend || round.player_ids.length >= 4}
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {addPlayerView === "search" && (
+                      <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                        <input
+                          value={playerSearchQ}
+                          onChange={(e) => setPlayerSearchQ(e.target.value)}
+                          placeholder="Search by name, username, email, or Auth0 id"
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void searchPlayers();
+                          }}
+                        />
+                        <button className="auth-btn secondary" onClick={() => void searchPlayers()} disabled={!!playerSearchLoading}>
+                          {playerSearchLoading ?? "Search"}
+                        </button>
+
+                        {playerSearchMsg && <div className="auth-mono">{playerSearchMsg}</div>}
+
+                        {!!playerSearchResults.length && (
+                          <div style={{ display: "grid", gap: ".5rem" }}>
+                            {playerSearchResults
+                              .filter((p) => p.external_id !== viewerId)
+                              .map((p) => (
+                                <div
+                                  key={p.external_id}
+                                  className="auth-row"
+                                  style={{ justifyContent: "space-between", alignItems: "center" }}
+                                >
+                                  <div>
+                                    <div style={{ fontWeight: 800 }}>{friendLabel(p)}</div>
+                                    <div className="auth-mono">{p.email ?? p.username ?? p.external_id}</div>
+                                  </div>
+                                  <button
+                                    className="auth-btn primary"
+                                    disabled={round.player_ids.includes(p.external_id) || round.player_ids.length >= 4}
+                                    onClick={() => void addPlayer(p.external_id)}
+                                  >
+                                    Add
+                                  </button>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+
+                        <div className="auth-row" style={{ justifyContent: "space-between" }}>
+                          <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                            Back
+                          </button>
+                          <button className="auth-btn secondary" onClick={() => setAddPlayerModalOpen(false)}>
+                            Done
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {isOwner && !round.completed_at && !isTournamentRound && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -388,83 +564,183 @@ export default function RoundScorecard() {
 
               {(viewMode === "scorecard" || readOnlyTournamentGroup) && (
                 <div style={{ display: "grid", gap: ".75rem" }}>
-                  <div className="table-scroll">
-                    <table className="scorecard-table">
-                      <thead>
-                        <tr>
-                          <th className="auth-mono" style={{ textAlign: "left" }}>Player</th>
-                          {front9.map((h) => (
-                            <th key={`h${h.number}`}>
-                              <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
-                                {h.number}
-                              </button>
-                            </th>
-                          ))}
-                          <th className="auth-mono">Out</th>
-                          {back9.map((h) => (
-                            <th key={`h${h.number}`}>
-                              <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
-                                {h.number}
-                              </button>
-                            </th>
-                          ))}
-                          <th className="auth-mono">In</th>
-                          <th className="auth-mono">Tot</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr>
-                          <td className="auth-mono">Par</td>
-                          {front9.map((h) => (
-                            <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
-                          ))}
-                          <td className="auth-mono">{front9.length ? sumPar(front9) : "—"}</td>
-                          {back9.map((h) => (
-                            <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
-                          ))}
-                          <td className="auth-mono">{back9.length ? sumPar(back9) : "—"}</td>
-                          <td className="auth-mono">{holes.length ? sumPar(holes) : "—"}</td>
-                        </tr>
-
-                        {round.player_ids.map((pid) => {
-                          const out = sumStrokes(pid, front9);
-                          const inn = sumStrokes(pid, back9);
-                          const tot = sumStrokes(pid, holes);
-                          return (
-                            <tr key={`p-${pid}`}>
-                              <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>{playerLabel[pid] ?? pid}</td>
+                  <div style={{ display: "grid", gap: ".75rem" }}>
+                    <div className="scorecard-section">
+                      <div className="table-scroll">
+                        <table className="scorecard-table">
+                          <thead>
+                            <tr>
+                              <th className="auth-mono" style={{ textAlign: "left" }}>Hole</th>
                               {front9.map((h) => (
-                                <td
-                                  key={`${pid}-${h.number}`}
-                                  title={
-                                    statsEnabled
-                                      ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
-                                      : undefined
-                                  }
-                                >
-                                  {h.strokes?.[pid] ?? ""}
-                                </td>
+                                <th key={`h${h.number}`}>
+                                  <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
+                                    {h.number}
+                                  </button>
+                                </th>
                               ))}
-                              <td className="auth-mono">{out ?? "—"}</td>
-                              {back9.map((h) => (
-                                <td
-                                  key={`${pid}-${h.number}`}
-                                  title={
-                                    statsEnabled
-                                      ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
-                                      : undefined
-                                  }
-                                >
-                                  {h.strokes?.[pid] ?? ""}
-                                </td>
-                              ))}
-                              <td className="auth-mono">{inn ?? "—"}</td>
-                              <td className="auth-mono">{tot ?? "—"}</td>
+                              <th className="auth-mono">Out</th>
                             </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td className="auth-mono">Par</td>
+                              {front9.map((h) => (
+                                <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
+                              ))}
+                              <td className="auth-mono">{front9.length ? sumPar(front9) : "—"}</td>
+                            </tr>
+
+                            {round.player_ids.map((pid) => {
+                              const out = sumStrokes(pid, front9);
+                              return (
+                                <tr key={`p-front-${pid}`}>
+                                  <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>{playerLabel[pid] ?? pid}</td>
+                                  {front9.map((h) => (
+                                    <td
+                                      key={`${pid}-${h.number}`}
+                                      title={
+                                        statsEnabled
+                                          ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
+                                          : undefined
+                                      }
+                                    >
+                                      {(() => {
+                                        const v = h.strokes?.[pid] ?? null;
+                                        return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
+                                      })()}
+                                    </td>
+                                  ))}
+                                  <td className="auth-mono">{out ?? "—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {back9.length > 0 && (
+                      <div className="scorecard-section">
+                        <div className="table-scroll">
+                          <table className="scorecard-table">
+                            <thead>
+                              <tr>
+                                <th className="auth-mono" style={{ textAlign: "left" }}>Hole</th>
+                                {back9.map((h) => (
+                                  <th key={`h${h.number}`}>
+                                    <button className="scorecard-holelink" type="button" onClick={() => setActiveHoleNumber(h.number)}>
+                                      {h.number}
+                                    </button>
+                                  </th>
+                                ))}
+                                <th className="auth-mono">In</th>
+                                <th className="auth-mono">Tot</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td className="auth-mono">Par</td>
+                                {back9.map((h) => (
+                                  <td key={`par${h.number}`} className="auth-mono">{h.par}</td>
+                                ))}
+                                <td className="auth-mono">{back9.length ? sumPar(back9) : "—"}</td>
+                                <td className="auth-mono">{holes.length ? sumPar(holes) : "—"}</td>
+                              </tr>
+
+                              {round.player_ids.map((pid) => {
+                                const inn = sumStrokes(pid, back9);
+                                const tot = sumStrokes(pid, holes);
+                                const totDiff = sumDiff(pid, holes);
+
+                                return (
+                                  <tr key={`p-back-${pid}`}>
+                                    <td style={{ fontWeight: 800, whiteSpace: "nowrap" }}>{playerLabel[pid] ?? pid}</td>
+                                    {back9.map((h) => (
+                                      <td
+                                        key={`${pid}-${h.number}`}
+                                        title={
+                                          statsEnabled
+                                            ? `P:${h.putts?.[pid] ?? "—"} FIR:${dirLabel(h.fairway?.[pid])} GIR:${dirLabel(h.gir?.[pid])}`
+                                            : undefined
+                                        }
+                                      >
+                                        {(() => {
+                                          const v = h.strokes?.[pid] ?? null;
+                                          return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
+                                        })()}
+                                      </td>
+                                    ))}
+                                    <td className="auth-mono">{inn ?? "—"}</td>
+                                    <td className="auth-mono">{tot != null ? (totDiff != null ? `${tot} (${fmtDiff(totDiff)})` : `${tot}`) : "—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="scorecard-footer">
+                      <div className="scorecard-footer__item">
+                        <div className="auth-mono">Par</div>
+                        <div style={{ fontWeight: 900 }}>{holes.length ? sumPar(holes) : "—"}</div>
+                      </div>
+                      {round.player_ids.map((pid) => {
+                        const tot = sumStrokes(pid, holes);
+                        const totDiff = sumDiff(pid, holes);
+                        return (
+                          <div key={`ft-${pid}`} className="scorecard-footer__item">
+                            <div className="auth-mono" style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {playerLabel[pid] ?? pid}
+                            </div>
+                            <div style={{ fontWeight: 900 }}>
+                              {tot != null ? (totDiff != null ? `${tot} (${fmtDiff(totDiff)})` : `${tot}`) : "—"}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {round.completed_at && statsEnabled && (
+                      <div className="scorecard-stats">
+                        <div className="scorecard-stats__header">
+                          <div style={{ fontWeight: 900 }}>Statistics</div>
+                          <div className="auth-mono">Puts · FIR · GIR</div>
+                        </div>
+
+                        <div className="scorecard-stats__grid">
+                          {round.player_ids.map((pid) => {
+                            const putts = sumPutts(pid, holes);
+                            const fir = countDir(pid, holes, "fairway", "hit");
+                            const gir = countDir(pid, holes, "gir", "hit");
+
+                            const firPct = fir.total ? Math.round((fir.hit / fir.total) * 100) : null;
+                            const girPct = gir.total ? Math.round((gir.hit / gir.total) * 100) : null;
+
+                            return (
+                              <div key={`stats-${pid}`} className="scorecard-stats__item">
+                                <div className="scorecard-stats__name auth-mono">{playerLabel[pid] ?? pid}</div>
+                                <div className="scorecard-stats__metrics">
+                                  <div className="scorecard-stats__metric">
+                                    <div className="auth-mono">P</div>
+                                    <div style={{ fontWeight: 900 }}>{putts ?? "—"}</div>
+                                  </div>
+                                  <div className="scorecard-stats__metric">
+                                    <div className="auth-mono">FIR</div>
+                                    <div style={{ fontWeight: 900 }}>{firPct != null ? `${firPct}%` : "—"}</div>
+                                  </div>
+                                  <div className="scorecard-stats__metric">
+                                    <div className="auth-mono">GIR</div>
+                                    <div style={{ fontWeight: 900 }}>{girPct != null ? `${girPct}%` : "—"}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {activeHole && (
@@ -514,10 +790,13 @@ export default function RoundScorecard() {
                               {playerLabel[pid] ?? pid}
                             </div>
                             <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
-                              {activeHole.strokes?.[pid] ?? "—"}
+                              {(() => {
+                                const v = activeHole.strokes?.[pid] ?? null;
+                                return v != null ? <ScoreMark strokes={v} par={activeHole.par} /> : "—";
+                              })()}
                             </div>
                             {statsEnabled && (
-                              <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                              <div className="auth-mono" style={{ marginTop: ".55rem" }}>
                                 P {activeHole.putts?.[pid] ?? "—"} · FIR {dirLabel(activeHole.fairway?.[pid])} · GIR {dirLabel(activeHole.gir?.[pid])}
                               </div>
                             )}
@@ -586,10 +865,13 @@ export default function RoundScorecard() {
                           {playerLabel[pid] ?? pid}
                         </div>
                         <div style={{ fontWeight: 900, fontSize: "1.15rem" }}>
-                          {activeHole.strokes?.[pid] ?? "—"}
+                          {(() => {
+                            const v = activeHole.strokes?.[pid] ?? null;
+                            return v != null ? <ScoreMark strokes={v} par={activeHole.par} /> : "—";
+                          })()}
                         </div>
                         {statsEnabled && (
-                          <div className="auth-mono" style={{ marginTop: ".25rem" }}>
+                          <div className="auth-mono" style={{ marginTop: ".55rem" }}>
                             P {activeHole.putts?.[pid] ?? "—"} · FIR {dirLabel(activeHole.fairway?.[pid])} · GIR {dirLabel(activeHole.gir?.[pid])}
                           </div>
                         )}
