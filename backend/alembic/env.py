@@ -18,6 +18,10 @@ import app.models.course  # noqa: F401
 import app.models.round  # noqa: F401
 import app.models.friend  # noqa: F401
 import app.models.friend_request  # noqa: F401
+import app.models.tournament  # noqa: F401
+import app.models.tournament_group  # noqa: F401
+import app.models.tournament_member  # noqa: F401
+import app.models.tournament_invite  # noqa: F401
 
 # this is the Alembic Config object, which provides access to the values within
 # the .ini file in use.

@@ -76,7 +76,7 @@ export default function RoundScorecard() {
   const activeSavedComplete =
     activeSavedStrokes != null &&
     (!statsEnabled || (activeSavedPutts != null && !!activeSavedGir && (isActivePar3 || !!activeSavedFairway)));
-  const blockHoleAdvance = statsEnabled && canEdit(activePlayerId) && !activeSavedComplete;
+  const blockHoleAdvance = !!(statsEnabled && canEdit(activePlayerId) && !activeSavedComplete);
 
   const [viewMode, setViewMode] = useState<"hole" | "scorecard">(readOnlyTournamentGroup ? "scorecard" : "hole");
 
@@ -551,7 +551,7 @@ export default function RoundScorecard() {
                           const next = idx >= 0 ? holes[idx + 1] : null;
                           if (next) setActiveHoleNumber(next.number);
                         }}
-                        disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1 || blockHoleAdvance}
+                        disabled={holes.findIndex((h) => h.number === activeHole.number) >= holes.length - 1 || !!blockHoleAdvance}
                       >
                         Next
                       </button>

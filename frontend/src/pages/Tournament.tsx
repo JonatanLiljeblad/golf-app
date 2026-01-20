@@ -46,15 +46,15 @@ export default function TournamentPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, tournamentId]);
 
-  async function startMyGroup() {
+  async function startGroup(groupId: number) {
     if (!t) return;
     setError(null);
     setMsg(null);
-    setLoading("Starting your group…");
+    setLoading("Starting group…");
     try {
       const res = await request<{ round_id: number }>(`/api/v1/tournaments/${t.id}/rounds`, {
         method: "POST",
-        body: JSON.stringify({}),
+        body: JSON.stringify({ group_id: groupId }),
       });
       navigate(`/rounds/${res.round_id}`);
     } catch (e) {
@@ -68,6 +68,22 @@ export default function TournamentPage() {
     } finally {
       setLoading(null);
     }
+  }
+
+  async function startMyGroup() {
+    if (!t) return;
+    if (t.my_group_round_id) {
+      navigate(`/rounds/${t.my_group_round_id}`);
+      return;
+    }
+
+    const slot = t.groups.find((g) => g.round_id == null);
+    if (!slot) {
+      setError("No available group slots.");
+      return;
+    }
+
+    await startGroup(slot.id);
   }
 
   async function joinGroup(roundId: number) {
@@ -287,10 +303,7 @@ export default function TournamentPage() {
                   <div className="auth-row">
                     <button
                       className="auth-btn primary"
-                      onClick={() => {
-                        if (t.my_group_round_id) navigate(`/rounds/${t.my_group_round_id}`);
-                        else void startMyGroup();
-                      }}
+                      onClick={() => void startMyGroup()}
                       disabled={!!loading || (!!t.paused_at && !t.completed_at)}
                     >
                       {t.my_group_round_id ? "Go to my group" : "Start my group"}
@@ -411,7 +424,7 @@ export default function TournamentPage() {
 
                     return (
                       <div
-                        key={g.round_id}
+                        key={g.id}
                         className="card-inset"
                         style={
                           isMine
@@ -432,29 +445,45 @@ export default function TournamentPage() {
                         >
                           <div style={{ minWidth: 0 }}>
                             <div style={{ fontWeight: 800 }}>
-                              Round #{g.round_id}
+                              {g.name}
                               {isMine ? " · Your group" : ""}
                             </div>
-                            <div className="auth-mono" style={{ wordBreak: "break-word" }}>
-                              Players: {g.players_count} · Leader: {g.owner_name ?? g.owner_id}
-                            </div>
+                            {g.round_id == null ? (
+                              <div className="auth-mono">Not started</div>
+                            ) : (
+                              <div className="auth-mono" style={{ wordBreak: "break-word" }}>
+                                Players: {g.players_count} · Leader: {g.owner_name ?? g.owner_id}
+                              </div>
+                            )}
                           </div>
                           <div className="auth-row" style={{ flexShrink: 0 }}>
-                            {canJoinOthers && g.players_count < 4 && (
+                            {g.round_id == null ? (
                               <button
                                 className="auth-btn primary"
-                                onClick={() => void joinGroup(g.round_id)}
-                                disabled={!!loading}
+                                onClick={() => void startGroup(g.id)}
+                                disabled={!!loading || (!!t.paused_at && !t.completed_at)}
                               >
-                                Join
+                                Start
                               </button>
+                            ) : (
+                              <>
+                                {canJoinOthers && g.players_count < 4 && (
+                                  <button
+                                    className="auth-btn primary"
+                                    onClick={() => void joinGroup(g.round_id!)}
+                                    disabled={!!loading || (!!t.paused_at && !t.completed_at)}
+                                  >
+                                    Join
+                                  </button>
+                                )}
+                                <Link
+                                  className={isMine ? "auth-btn primary" : "auth-btn secondary"}
+                                  to={`/rounds/${g.round_id!}`}
+                                >
+                                  Open
+                                </Link>
+                              </>
                             )}
-                            <Link
-                              className={isMine ? "auth-btn primary" : "auth-btn secondary"}
-                              to={`/rounds/${g.round_id}`}
-                            >
-                              Open
-                            </Link>
                           </div>
                         </div>
                       </div>

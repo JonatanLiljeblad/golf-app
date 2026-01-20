@@ -12,6 +12,7 @@ from app.models.course import Course
 from app.models.player import Player
 from app.models.round import HoleScore, Round, RoundParticipant
 from app.models.tournament import Tournament
+from app.models.tournament_group import TournamentGroup
 from app.models.tournament_invite import TournamentInvite
 from app.models.tournament_member import TournamentMember
 
@@ -45,6 +46,7 @@ class TournamentCreate(BaseModel):
     course_id: int
     name: str = Field(min_length=1, max_length=128)
     is_public: bool = False
+    groups: list[str] | None = None
 
 
 class TournamentPatch(BaseModel):
@@ -66,12 +68,14 @@ class TournamentSummaryOut(BaseModel):
 
 
 class TournamentGroupOut(BaseModel):
-    round_id: int
-    owner_id: str
-    owner_name: str
-    players_count: int
-    started_at: datetime
-    completed_at: datetime | None
+    id: int
+    name: str
+    round_id: int | None
+    owner_id: str = ""
+    owner_name: str | None = None
+    players_count: int = 0
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
 
 class LeaderboardEntryOut(BaseModel):
@@ -135,6 +139,17 @@ def create_tournament(
     except IntegrityError:
         db.rollback()
 
+    group_names = payload.groups or [f"Group {i + 1}" for i in range(4)]
+    if len(group_names) < 1:
+        raise HTTPException(status_code=400, detail="min 1 group")
+    if len(group_names) > 12:
+        raise HTTPException(status_code=400, detail="max 12 groups")
+
+    for idx, g in enumerate(group_names):
+        name = (g or "").strip() or f"Group {idx + 1}"
+        db.add(TournamentGroup(tournament_id=t.id, name=name))
+    db.commit()
+
     return get_tournament(t.id, db=db, user_id=user_id)
 
 
@@ -155,10 +170,12 @@ def list_tournaments(
             owner.username.label("owner_username"),
             owner.email.label("owner_email"),
             Tournament.completed_at.label("completed_at"),
-            func.count(func.distinct(Round.id)).label("groups_count"),
+            func.count(func.distinct(TournamentGroup.id)).label("slots_count"),
+            func.count(func.distinct(Round.id)).label("rounds_count"),
         )
         .join(Course, Course.id == Tournament.course_id)
         .join(owner, owner.id == Tournament.owner_player_id)
+        .outerjoin(TournamentGroup, TournamentGroup.tournament_id == Tournament.id)
         .outerjoin(Round, Round.tournament_id == Tournament.id)
         .where(Tournament.id.in_(_tournament_access_clause(me.id)))
         .group_by(
@@ -174,8 +191,9 @@ def list_tournaments(
     ).all()
 
     out: list[TournamentSummaryOut] = []
-    for (t, course_name, owner_id, owner_name, owner_username, owner_email, completed_at, groups_count) in rows:
+    for (t, course_name, owner_id, owner_name, owner_username, owner_email, completed_at, slots_count, rounds_count) in rows:
         label = owner_name or owner_username or owner_email or owner_id
+        effective_groups = int(slots_count or 0) or int(rounds_count or 0)
         out.append(
             TournamentSummaryOut(
                 id=t.id,
@@ -187,7 +205,7 @@ def list_tournaments(
                 owner_name=label,
                 created_at=t.created_at,
                 completed_at=completed_at,
-                groups_count=int(groups_count or 0),
+                groups_count=effective_groups,
             )
         )
     return out
@@ -267,17 +285,46 @@ def get_tournament(
         .order_by(Round.started_at.asc(), Round.id.asc())
     ).scalars().unique().all()
 
-    groups = [
-        TournamentGroupOut(
-            round_id=r.id,
-            owner_id=r.owner.external_id,
-            owner_name=_player_label(r.owner),
-            players_count=len(r.participants),
-            started_at=r.started_at,
-            completed_at=r.completed_at,
-        )
-        for r in rounds
-    ]
+    slots = db.execute(
+        select(TournamentGroup)
+        .where(TournamentGroup.tournament_id == t.id)
+        .order_by(TournamentGroup.id.asc())
+    ).scalars().all()
+
+    if slots:
+        rounds_by_slot = {r.tournament_group_id: r for r in rounds if r.tournament_group_id is not None}
+        groups: list[TournamentGroupOut] = []
+        for slot in slots:
+            r = rounds_by_slot.get(slot.id)
+            if r:
+                groups.append(
+                    TournamentGroupOut(
+                        id=slot.id,
+                        name=slot.name,
+                        round_id=r.id,
+                        owner_id=r.owner.external_id,
+                        owner_name=_player_label(r.owner),
+                        players_count=len(r.participants),
+                        started_at=r.started_at,
+                        completed_at=r.completed_at,
+                    )
+                )
+            else:
+                groups.append(TournamentGroupOut(id=slot.id, name=slot.name, round_id=None))
+    else:
+        groups = [
+            TournamentGroupOut(
+                id=r.id,
+                name=f"Group {idx + 1}",
+                round_id=r.id,
+                owner_id=r.owner.external_id,
+                owner_name=_player_label(r.owner),
+                players_count=len(r.participants),
+                started_at=r.started_at,
+                completed_at=r.completed_at,
+            )
+            for idx, r in enumerate(rounds)
+        ]
 
     hole_numbers = [h.number for h in (t.course.holes or [])]
     hole_par = {h.number: h.par for h in (t.course.holes or [])}
@@ -471,6 +518,7 @@ class GuestPlayerIn(BaseModel):
 
 
 class TournamentRoundCreate(BaseModel):
+    group_id: int | None = None
     # Players are added the same way as /rounds.
     stats_enabled: bool = False
     player_ids: list[str] | None = None
@@ -521,6 +569,25 @@ def create_group_round(
     if already_in_tournament:
         raise HTTPException(status_code=409, detail="You are already in a group in this tournament")
 
+    slots_exist = db.execute(
+        select(TournamentGroup.id).where(TournamentGroup.tournament_id == t.id).limit(1)
+    ).first()
+    slot = None
+    if slots_exist:
+        if payload.group_id is None:
+            raise HTTPException(status_code=400, detail="group_id required")
+        slot = db.execute(
+            select(TournamentGroup)
+            .where(TournamentGroup.id == payload.group_id, TournamentGroup.tournament_id == t.id)
+            .limit(1)
+        ).scalars().one_or_none()
+        if not slot:
+            raise HTTPException(status_code=404, detail="Group not found")
+
+        started = db.execute(select(Round.id).where(Round.tournament_group_id == slot.id).limit(1)).first()
+        if started:
+            raise HTTPException(status_code=409, detail="Group already started")
+
     course = db.execute(
         select(Course)
         .options(joinedload(Course.holes))
@@ -552,6 +619,7 @@ def create_group_round(
         owner_player_id=leader.id,
         course_id=t.course_id,
         tournament_id=t.id,
+        tournament_group_id=(slot.id if slot else None),
         stats_enabled=bool(payload.stats_enabled),
     )
     db.add(rnd)

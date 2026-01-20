@@ -20,6 +20,9 @@ class Round(Base):
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournaments.id", ondelete="SET NULL"), index=True
     )
+    tournament_group_id: Mapped[int | None] = mapped_column(
+        ForeignKey("tournament_groups.id", ondelete="SET NULL"), index=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

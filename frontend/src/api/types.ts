@@ -78,12 +78,14 @@ export type TournamentSummary = {
 };
 
 export type TournamentGroup = {
-  round_id: number;
+  id: number;
+  name: string;
+  round_id: number | null;
   owner_id: string;
   owner_name?: string | null;
   players_count: number;
-  started_at: string;
-  completed_at: string | null;
+  started_at?: string | null;
+  completed_at?: string | null;
 };
 
 export type TournamentLeaderboardEntry = {
