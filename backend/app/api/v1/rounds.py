@@ -3,6 +3,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from pydantic.config import ConfigDict
 from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
@@ -52,6 +53,8 @@ class HoleScoreOut(BaseModel):
 
 
 class ScorecardHole(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     number: int
     par: int
     distance: int | None = None
@@ -126,7 +129,9 @@ def _resolve_player_ref(db: Session, ref: str) -> Player:
     return p
 
 
-@router.post("/rounds", response_model=RoundOut, status_code=201)
+@router.post(
+    "/rounds", response_model=RoundOut, status_code=201, response_model_exclude_unset=True
+)
 def create_round(
     payload: RoundCreate,
     db: Session = Depends(get_db),
@@ -408,7 +413,9 @@ def list_rounds(
     return [_round_to_summary(r) for r in rounds]
 
 
-@router.get("/rounds/{round_id}", response_model=RoundOut)
+@router.get(
+    "/rounds/{round_id}", response_model=RoundOut, response_model_exclude_unset=True
+)
 def get_round(
     round_id: int,
     db: Session = Depends(get_db),
@@ -523,24 +530,25 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
 
     holes = []
     for h in rnd.course.holes:
-        holes.append(
-            ScorecardHole(
-                number=h.number,
-                par=h.par,
-                distance=h.distance,
-                hcp=h.hcp,
-                strokes={pid: strokes_by_hole.get(h.number, {}).get(pid) for pid in participant_ids},
-                putts={pid: putts_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
-                if rnd.stats_enabled
-                else None,
-                fairway={pid: fairway_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
-                if rnd.stats_enabled
-                else None,
-                gir={pid: gir_by_hole.get(h.number, {}).get(pid) for pid in participant_ids}
-                if rnd.stats_enabled
-                else None,
-            )
+        hole_kwargs = dict(
+            number=h.number,
+            par=h.par,
+            distance=h.distance,
+            hcp=h.hcp,
+            strokes={pid: strokes_by_hole.get(h.number, {}).get(pid) for pid in participant_ids},
         )
+        if rnd.stats_enabled:
+            hole_kwargs["putts"] = {
+                pid: putts_by_hole.get(h.number, {}).get(pid) for pid in participant_ids
+            }
+            hole_kwargs["fairway"] = {
+                pid: fairway_by_hole.get(h.number, {}).get(pid) for pid in participant_ids
+            }
+            hole_kwargs["gir"] = {
+                pid: gir_by_hole.get(h.number, {}).get(pid) for pid in participant_ids
+            }
+
+        holes.append(ScorecardHole(**hole_kwargs))
 
     total_par, owner_total, totals_by_player = _compute_totals(
         rnd.course, participant_ids, rnd.scores, rnd.owner.external_id
