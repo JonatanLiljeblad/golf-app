@@ -256,6 +256,8 @@ def delete_round(
         raise HTTPException(status_code=404, detail="Round not found")
     if rnd.completed_at is not None:
         raise HTTPException(status_code=409, detail="Cannot delete a completed round")
+    if rnd.tournament_id is not None:
+        raise HTTPException(status_code=409, detail="Cannot delete a tournament round")
 
     db.delete(rnd)
     db.commit()

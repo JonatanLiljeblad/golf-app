@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
 import type { Round } from "../api/types";
@@ -35,6 +35,7 @@ export default function RoundScorecard() {
   const [inviteId, setInviteId] = useState("");
 
   const isOwner = !!round && viewerId && round.owner_id === viewerId;
+  const isTournamentRound = !!round?.tournament_id;
   const tournamentLocked = !!round?.tournament_completed_at || !!round?.tournament_paused_at;
 
   const playerLabel = useMemo(() => {
@@ -285,9 +286,16 @@ export default function RoundScorecard() {
                   {statsEnabled ? " · Stats: On" : " · Stats: Off"}
                 </div>
               </div>
-              <button className="auth-btn secondary" onClick={() => void load(round.id)}>
-                Refresh
-              </button>
+              <div className="auth-row">
+                {round.tournament_id && (
+                  <Link className="auth-btn secondary" to={`/tournaments/${round.tournament_id}`}>
+                    Tournament
+                  </Link>
+                )}
+                <button className="auth-btn secondary" onClick={() => void load(round.id)}>
+                  Refresh
+                </button>
+              </div>
             </div>
           </div>
 
@@ -352,7 +360,7 @@ export default function RoundScorecard() {
                 )}
               </div>
 
-              {isOwner && !round.completed_at && (
+              {isOwner && !round.completed_at && !isTournamentRound && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <button className="auth-btn secondary" onClick={() => void deleteRound()}>
                     Delete round

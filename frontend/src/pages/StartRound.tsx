@@ -49,9 +49,6 @@ export default function StartRound() {
   const [guestHandicap, setGuestHandicap] = useState("");
   const [guestPlayers, setGuestPlayers] = useState<GuestPlayer[]>([]);
 
-  const [tournamentMode, setTournamentMode] = useState(false);
-  const [tournamentName, setTournamentName] = useState("");
-  const [tournamentIsPublic, setTournamentIsPublic] = useState(false);
   const [tournamentId, setTournamentId] = useState<number | null>(null);
 
   const [statsEnabled, setStatsEnabled] = useState(false);
@@ -99,10 +96,6 @@ export default function StartRound() {
 
   async function startRound() {
     if (!selectedCourseId) return;
-    if (tournamentMode && !tournamentName.trim()) {
-      setError("Tournament name is required.");
-      return;
-    }
 
     setError(null);
     setLoading("Starting round…");
@@ -115,35 +108,12 @@ export default function StartRound() {
       const player_ids = Array.from(new Set([...friendPlayerIds, ...manual_ids]));
       const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap }));
 
-      if (!tournamentMode) {
-        const created = await request<Round>("/api/v1/rounds", {
-          method: "POST",
-          body: JSON.stringify({ course_id: selectedCourseId, stats_enabled: statsEnabled, player_ids, guest_players }),
-        });
-        setTournamentId(null);
-        navigate(`/rounds/${created.id}`);
-        return;
-      }
-
-      const createdTournament = await request<{ id: number }>("/api/v1/tournaments", {
+      const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
-        body: JSON.stringify({
-          course_id: selectedCourseId,
-          name: tournamentName.trim(),
-          is_public: tournamentIsPublic,
-        }),
+        body: JSON.stringify({ course_id: selectedCourseId, stats_enabled: statsEnabled, player_ids, guest_players }),
       });
-      setTournamentId(createdTournament.id);
-
-      const createdGroup = await request<{ round_id: number }>(
-        `/api/v1/tournaments/${createdTournament.id}/rounds`,
-        {
-          method: "POST",
-          body: JSON.stringify({ stats_enabled: statsEnabled, player_ids, guest_players }),
-        }
-      );
-
-      navigate(`/rounds/${createdGroup.round_id}`);
+      setTournamentId(null);
+      navigate(`/rounds/${created.id}`);
     } catch (e) {
       const err = e as ApiError;
       const detail =
@@ -347,48 +317,6 @@ export default function StartRound() {
             <div className="auth-mono">If enabled, each hole requires putts + fairway + GIR before continuing.</div>
           </div>
 
-          <div style={{ fontWeight: 700 }}>Tournament</div>
-          <label className="auth-row" style={{ gap: ".5rem" }}>
-            <input
-              type="checkbox"
-              checked={tournamentMode}
-              onChange={(e) => {
-                setTournamentMode(e.target.checked);
-                if (!e.target.checked) {
-                  setTournamentName("");
-                  setTournamentIsPublic(false);
-                }
-              }}
-              style={{ width: 18, height: 18 }}
-            />
-            <span style={{ fontWeight: 700 }}>Create tournament (multiple groups)</span>
-          </label>
-          {tournamentMode && (
-            <div style={{ display: "grid", gap: ".5rem" }}>
-              <label style={{ display: "grid", gap: ".25rem" }}>
-                <span style={{ fontWeight: 700 }}>Tournament name</span>
-                <input
-                  value={tournamentName}
-                  onChange={(e) => setTournamentName(e.target.value)}
-                  placeholder="e.g. Wednesday Stroke Play"
-                />
-              </label>
-
-              <label className="auth-row" style={{ gap: ".5rem" }}>
-                <input
-                  type="checkbox"
-                  checked={tournamentIsPublic}
-                  onChange={(e) => setTournamentIsPublic(e.target.checked)}
-                  style={{ width: 18, height: 18 }}
-                />
-                <span style={{ fontWeight: 700 }}>Public tournament</span>
-              </label>
-
-              <div className="auth-mono">
-                You will create your own 1–4 player group. Other groups start their own rounds in the same tournament.
-              </div>
-            </div>
-          )}
         </div>
 
         <div style={{ display: "grid", gap: ".75rem" }}>
@@ -649,7 +577,7 @@ export default function StartRound() {
 
         <button
           className="auth-btn primary"
-          disabled={!selectedCourseId || !!loading || (tournamentMode && !tournamentName.trim())}
+          disabled={!selectedCourseId || !!loading}
           onClick={() => void startRound()}
         >
           Start round
