@@ -7,7 +7,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
-from app.models.course import Course, Hole
+from app.models.course import Course, CourseTee, Hole, TeeHoleDistance
 from app.models.round import Round
 
 router = APIRouter()
@@ -27,9 +27,22 @@ class HoleOut(HoleIn):
         from_attributes = True
 
 
+class TeeHoleDistanceIn(BaseModel):
+    hole_number: int = Field(ge=1, le=18)
+    distance: int = Field(ge=1, le=2000)
+
+
+class TeeIn(BaseModel):
+    tee_name: str = Field(min_length=1, max_length=64)
+    course_rating: float | None = None
+    slope_rating: int | None = None
+    hole_distances: list[TeeHoleDistanceIn]
+
+
 class CourseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     holes: list[HoleIn]
+    tees: list[TeeIn] = []
 
     @field_validator("holes")
     @classmethod
@@ -47,11 +60,43 @@ class CourseCreate(BaseModel):
 
         return holes
 
+    @field_validator("tees")
+    @classmethod
+    def validate_tees(cls, tees: list[TeeIn], info):
+        holes: list[HoleIn] = info.data.get("holes") or []
+        hole_numbers = {h.number for h in holes}
+
+        names = [t.tee_name.strip() for t in tees]
+        if any(not n for n in names):
+            raise ValueError("tee_name required")
+        if len(set(n.lower() for n in names)) != len(names):
+            raise ValueError("tee_name must be unique")
+
+        for t in tees:
+            if len(t.hole_distances) != len(holes):
+                raise ValueError("hole_distances must match holes length")
+            nums = [d.hole_number for d in t.hole_distances]
+            if len(set(nums)) != len(nums):
+                raise ValueError("hole_numbers must be unique in hole_distances")
+            if set(nums) != hole_numbers:
+                raise ValueError("hole_distances must include all hole numbers")
+
+        return tees
+
+
+class TeeSummaryOut(BaseModel):
+    id: int
+    tee_name: str
+
+    class Config:
+        from_attributes = True
+
 
 class CourseOut(BaseModel):
     id: int
     name: str
     holes: list[HoleOut]
+    tees: list[TeeSummaryOut] = []
 
     class Config:
         from_attributes = True
@@ -69,12 +114,26 @@ def create_course(
         Hole(number=h.number, par=h.par, distance=h.distance, hcp=h.hcp) for h in payload.holes
     ]
 
+    if payload.tees:
+        course.tees = [
+            CourseTee(
+                tee_name=t.tee_name.strip(),
+                course_rating=t.course_rating,
+                slope_rating=t.slope_rating,
+                hole_distances=[
+                    TeeHoleDistance(hole_number=d.hole_number, distance=d.distance)
+                    for d in sorted(t.hole_distances, key=lambda x: x.hole_number)
+                ],
+            )
+            for t in payload.tees
+        ]
+
     db.add(course)
     db.commit()
 
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes))
+        .options(joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.id == course.id)
     )
     return db.execute(stmt).scalars().unique().one()
@@ -87,7 +146,7 @@ def list_courses(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes))
+        .options(joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.archived_at.is_(None))
         .order_by(Course.id)
     )
@@ -102,7 +161,7 @@ def get_course(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes))
+        .options(joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.id == course_id, Course.archived_at.is_(None))
     )
     course = db.execute(stmt).scalars().unique().one_or_none()

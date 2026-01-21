@@ -1,4 +1,4 @@
-from .course import Course, Hole
+from .course import Course, CourseTee, Hole, TeeHoleDistance
 from .friend import Friend
 from .friend_request import FriendRequest
 from .player import Player
@@ -12,7 +12,9 @@ from .tournament_member import TournamentMember
 __all__ = [
     "Player",
     "Course",
+    "CourseTee",
     "Hole",
+    "TeeHoleDistance",
     "Friend",
     "FriendRequest",
     "Tournament",

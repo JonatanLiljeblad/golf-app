@@ -29,6 +29,14 @@ export default function StartRound() {
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const [selectedTeeId, setSelectedTeeId] = useState<number | null>(null);
+
+  const selectedCourse = useMemo(
+    () => (selectedCourseId != null ? courses.find((c) => c.id === selectedCourseId) ?? null : null),
+    [courses, selectedCourseId]
+  );
+
+  const tees = selectedCourse?.tees ?? [];
   const [otherPlayerIds, setOtherPlayerIds] = useState<string[]>(["", "", ""]);
   const [friendPlayerIds, setFriendPlayerIds] = useState<string[]>([]);
 
@@ -110,7 +118,13 @@ export default function StartRound() {
 
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
-        body: JSON.stringify({ course_id: selectedCourseId, stats_enabled: statsEnabled, player_ids, guest_players }),
+        body: JSON.stringify({
+          course_id: selectedCourseId,
+          tee_id: selectedTeeId || undefined,
+          stats_enabled: statsEnabled,
+          player_ids,
+          guest_players,
+        }),
       });
       setTournamentId(null);
       navigate(`/rounds/${created.id}`);
@@ -244,6 +258,10 @@ export default function StartRound() {
   }, [isAuthenticated]);
 
   useEffect(() => {
+    setSelectedTeeId(null);
+  }, [selectedCourseId]);
+
+  useEffect(() => {
     const maxSlots = maxManualPlayerSlots();
     setOtherPlayerIds((prev) => prev.map((v, i) => (i < maxSlots ? v : "")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,6 +319,20 @@ export default function StartRound() {
             )}
           </select>
         </label>
+
+        {!!tees.length && (
+          <label style={{ display: "grid", gap: ".25rem" }}>
+            <span style={{ fontWeight: 700 }}>Tee</span>
+            <select value={selectedTeeId ?? ""} onChange={(e) => setSelectedTeeId(Number(e.target.value))}>
+              <option value="">Default</option>
+              {tees.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.tee_name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div style={{ display: "grid", gap: ".75rem" }}>
           <div style={{ display: "grid", gap: ".5rem" }}>

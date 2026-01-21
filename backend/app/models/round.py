@@ -17,6 +17,9 @@ class Round(Base):
     course_id: Mapped[int] = mapped_column(
         ForeignKey("courses.id", ondelete="RESTRICT"), nullable=False, index=True
     )
+    tee_id: Mapped[int | None] = mapped_column(
+        ForeignKey("course_tees.id", ondelete="RESTRICT"), index=True
+    )
     tournament_id: Mapped[int | None] = mapped_column(
         ForeignKey("tournaments.id", ondelete="SET NULL"), index=True
     )

@@ -6,10 +6,16 @@ export type Hole = {
   hcp: number | null;
 };
 
+export type TeeSummary = {
+  id: number;
+  tee_name: string;
+};
+
 export type Course = {
   id: number;
   name: string;
   holes: Hole[];
+  tees?: TeeSummary[];
 };
 
 export type RoundHole = {
@@ -43,6 +49,8 @@ export type Round = {
   id: number;
   course_id: number;
   course_name: string;
+  tee_id?: number | null;
+  tee?: TeeSummary | null;
   tournament_id: number | null;
   tournament_completed_at?: string | null;
   tournament_paused_at?: string | null;

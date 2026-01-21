@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
-from app.models.course import Course, Hole
+from app.models.course import Course, CourseTee, Hole, TeeHoleDistance
 from app.models.player import Player
 from app.models.activity_event import ActivityEvent
 from app.models.round import HoleScore, Round, RoundParticipant
@@ -26,6 +26,7 @@ class GuestPlayerIn(BaseModel):
 
 class RoundCreate(BaseModel):
     course_id: int
+    tee_id: int | None = None
     stats_enabled: bool = False
     player_ids: list[str] | None = None
     guest_players: list[GuestPlayerIn] | None = None
@@ -75,10 +76,17 @@ class RoundPlayerOut(BaseModel):
     handicap: float | None
 
 
+class TeeSummaryOut(BaseModel):
+    id: int
+    tee_name: str
+
+
 class RoundOut(BaseModel):
     id: int
     course_id: int
     course_name: str
+    tee_id: int | None
+    tee: TeeSummaryOut | None = None
     tournament_id: int | None
     tournament_completed_at: datetime | None
     tournament_paused_at: datetime | None
@@ -160,6 +168,17 @@ def create_round(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
+    tee = None
+    if payload.tee_id is not None:
+        tee = db.execute(
+            select(CourseTee)
+            .where(CourseTee.id == payload.tee_id)
+        ).scalars().one_or_none()
+        if not tee:
+            raise HTTPException(status_code=404, detail="Tee not found")
+        if tee.course_id != course.id:
+            raise HTTPException(status_code=400, detail="tee_id does not belong to course")
+
     players: list[Player] = [owner]
 
     if payload.player_ids:
@@ -194,6 +213,7 @@ def create_round(
     rnd = Round(
         owner_player_id=owner.id,
         course_id=payload.course_id,
+        tee_id=payload.tee_id,
         stats_enabled=bool(payload.stats_enabled),
     )
     db.add(rnd)
@@ -314,6 +334,7 @@ def submit_score(
         .outerjoin(RoundParticipant, RoundParticipant.round_id == Round.id)
         .options(
             joinedload(Round.course).joinedload(Course.holes),
+            joinedload(Round.course).joinedload(Course.tees).joinedload(CourseTee.hole_distances),
             joinedload(Round.participants).joinedload(RoundParticipant.player),
         )
         .where(
@@ -678,6 +699,7 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         .options(
             joinedload(Round.owner),
             joinedload(Round.course).joinedload(Course.holes),
+            joinedload(Round.course).joinedload(Course.tees).joinedload(CourseTee.hole_distances),
             joinedload(Round.participants).joinedload(RoundParticipant.player),
             joinedload(Round.scores).joinedload(HoleScore.player),
         )
@@ -718,12 +740,19 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         if s.gir is not None:
             gir_by_hole.setdefault(s.hole_number, {})[ext] = s.gir
 
+    tee = None
+    tee_distance_by_hole: dict[int, int] = {}
+    if rnd.tee_id is not None:
+        tee = next((t for t in (rnd.course.tees or []) if t.id == rnd.tee_id), None)
+        if tee:
+            tee_distance_by_hole = {d.hole_number: d.distance for d in (tee.hole_distances or [])}
+
     holes = []
     for h in rnd.course.holes:
         hole_kwargs = dict(
             number=h.number,
             par=h.par,
-            distance=h.distance,
+            distance=(tee_distance_by_hole.get(h.number) if tee_distance_by_hole else h.distance),
             hcp=h.hcp,
             strokes={pid: strokes_by_hole.get(h.number, {}).get(pid) for pid in participant_ids},
         )
@@ -772,6 +801,8 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         id=rnd.id,
         course_id=rnd.course_id,
         course_name=rnd.course.name,
+        tee_id=rnd.tee_id,
+        tee=(TeeSummaryOut(id=tee.id, tee_name=tee.tee_name) if tee else None),
         tournament_id=rnd.tournament_id,
         tournament_completed_at=t_completed_at,
         tournament_paused_at=t_paused_at,
