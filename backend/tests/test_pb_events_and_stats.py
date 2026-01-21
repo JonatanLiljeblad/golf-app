@@ -358,3 +358,45 @@ def test_players_me_includes_stats(client):
     assert me["rounds_count"] == 1
     # 3 on each hole for 18 holes = 54 strokes
     assert me["avg_strokes"] == 54.0
+
+
+def test_nine_hole_course_stats_normalization(client):
+    """Test that avg_strokes for 9-hole courses is normalized to 18-hole equivalent (doubled)."""
+    # Create a 9-hole course with par 4
+    course_payload = {
+        "name": "Nine Hole Test Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+    }
+    c = client.post(
+        "/api/v1/courses", json=course_payload, headers={"X-User-Id": "u1"}
+    ).json()
+    course_id = c["id"]
+
+    # Create and complete a round with 5 strokes per hole (total_strokes=45)
+    r = client.post(
+        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+    )
+    assert r.status_code == 201
+    round_id = r.json()["id"]
+
+    for hn in range(1, 10):
+        resp = client.post(
+            f"/api/v1/rounds/{round_id}/scores",
+            json={"hole_number": hn, "strokes": 5},
+            headers={"X-User-Id": "u1"},
+        )
+        assert resp.status_code == 200
+
+    # Get player data from /players/me
+    me = client.get("/api/v1/players/me", headers={"X-User-Id": "u1"}).json()
+    external_id = me["external_id"]
+    assert me["rounds_count"] == 1
+    # 9 holes * 5 strokes = 45, normalized to 18-hole = 45 * 2 = 90.0
+    assert me["avg_strokes"] == 90.0
+
+    # Verify via /players/{external_id}/stats endpoint
+    stats = client.get(
+        f"/api/v1/players/{external_id}/stats", headers={"X-User-Id": "u1"}
+    ).json()
+    assert stats["rounds_count"] == 1
+    assert stats["avg_strokes"] == 90.0

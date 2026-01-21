@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,16 +51,38 @@ class PlayerCreateIn(BaseModel):
 
 
 def _player_stats(db: Session, player_id: int) -> PlayerStatsOut:
+    course_holes = (
+        select(Hole.course_id, func.count(Hole.id).label("holes_count"))
+        .group_by(Hole.course_id)
+    ).subquery()
+
     per_round = (
-        select(func.sum(HoleScore.strokes).label("total_strokes"))
+        select(
+            func.sum(HoleScore.strokes).label("total_strokes"),
+            func.count(HoleScore.id).label("holes_scored"),
+            course_holes.c.holes_count,
+        )
         .select_from(HoleScore)
         .join(Round, Round.id == HoleScore.round_id)
+        .join(course_holes, course_holes.c.course_id == Round.course_id)
         .where(HoleScore.player_id == player_id, Round.completed_at.isnot(None))
-        .group_by(HoleScore.round_id)
+        .group_by(HoleScore.round_id, course_holes.c.holes_count)
+        # Defensive: only count rounds that have scores for every hole in the course.
+        .having(func.count(HoleScore.id) == course_holes.c.holes_count)
     ).subquery()
 
     rounds_count = db.execute(select(func.count()).select_from(per_round)).scalar_one()
-    avg = db.execute(select(func.avg(per_round.c.total_strokes))).scalar_one()
+    avg = db.execute(
+        select(
+            func.avg(
+                case(
+                    (per_round.c.holes_count == 9, per_round.c.total_strokes * 2.0),
+                    else_=per_round.c.total_strokes,
+                )
+            )
+        )
+    ).scalar_one()
+
     return PlayerStatsOut(
         rounds_count=int(rounds_count or 0),
         avg_strokes=(float(avg) if avg is not None else None),
