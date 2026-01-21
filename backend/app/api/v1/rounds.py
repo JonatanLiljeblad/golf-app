@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.api.deps import ensure_player, get_current_user_id, get_db
 from app.models.course import Course
 from app.models.player import Player
+from app.models.activity_event import ActivityEvent
 from app.models.round import HoleScore, Round, RoundParticipant
 from app.models.tournament import Tournament
 from app.models.tournament_member import TournamentMember
@@ -393,6 +394,43 @@ def submit_score(
         db.add(score)
 
     db.flush()
+
+    # Emit "birdie or better" activity events for the player.
+    diff = payload.strokes - int(hole_par or 0)
+    kind = None
+    if diff <= -3:
+        kind = "albatross"
+    elif diff == -2:
+        kind = "eagle"
+    elif diff == -1:
+        kind = "birdie"
+
+    existing_event = db.execute(
+        select(ActivityEvent).where(
+            ActivityEvent.round_id == round_id,
+            ActivityEvent.player_id == target_player_id,
+            ActivityEvent.hole_number == payload.hole_number,
+        )
+    ).scalars().one_or_none()
+
+    if kind and hole_par is not None:
+        if existing_event:
+            existing_event.strokes = payload.strokes
+            existing_event.par = int(hole_par)
+            existing_event.kind = kind
+        else:
+            db.add(
+                ActivityEvent(
+                    player_id=target_player_id,
+                    round_id=round_id,
+                    hole_number=payload.hole_number,
+                    strokes=payload.strokes,
+                    par=int(hole_par),
+                    kind=kind,
+                )
+            )
+    elif existing_event:
+        db.delete(existing_event)
 
     # Auto-complete once every player has a score for every hole.
     if rnd.completed_at is None:

@@ -1,8 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError, ProgrammingError
 from sqlalchemy.orm import Session
+
+from app.models.activity_event import ActivityEvent
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
 from app.models.friend import Friend
@@ -33,6 +37,25 @@ class FriendOut(BaseModel):
     username: str | None
     name: str | None
     handicap: float | None
+
+    class Config:
+        from_attributes = True
+
+
+class ActivityPlayerOut(BaseModel):
+    external_id: str
+    username: str | None
+    name: str | None
+
+
+class ActivityEventOut(BaseModel):
+    id: int
+    created_at: datetime
+    kind: str
+    hole_number: int
+    strokes: int
+    par: int
+    player: ActivityPlayerOut
 
     class Config:
         from_attributes = True
@@ -208,6 +231,46 @@ def decline_friend_request(
 @router.post("/friends", response_model=FriendRequestActionOut, status_code=201)
 def add_friend(payload: FriendAddIn, db: Session = Depends(get_db), user_id: str = Depends(get_current_user_id)):
     return send_friend_request(payload, db, user_id)
+
+
+@router.get("/friends/activity", response_model=list[ActivityEventOut])
+def list_friend_activity(
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+    limit: int = Query(20, ge=1, le=100),
+):
+    me = ensure_player(db, user_id)
+    try:
+        friend_ids = db.execute(select(Friend.friend_player_id).where(Friend.player_id == me.id)).scalars().all()
+        if not friend_ids:
+            return []
+
+        rows = db.execute(
+            select(ActivityEvent, Player)
+            .join(Player, Player.id == ActivityEvent.player_id)
+            .where(ActivityEvent.player_id.in_(friend_ids))
+            .order_by(ActivityEvent.created_at.desc(), ActivityEvent.id.desc())
+            .limit(limit)
+        ).all()
+    except ProgrammingError as e:
+        if "does not exist" in str(e).lower():
+            raise HTTPException(status_code=503, detail="DB not migrated. Run: alembic upgrade head")
+        raise
+
+    out: list[ActivityEventOut] = []
+    for ev, p in rows:
+        out.append(
+            ActivityEventOut(
+                id=ev.id,
+                created_at=ev.created_at,
+                kind=ev.kind,
+                hole_number=ev.hole_number,
+                strokes=ev.strokes,
+                par=ev.par,
+                player=ActivityPlayerOut(external_id=p.external_id, username=p.username, name=p.name),
+            )
+        )
+    return out
 
 
 @router.delete("/friends/{friend_external_id}")

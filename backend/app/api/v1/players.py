@@ -161,3 +161,21 @@ def search_players(
         .limit(20)
     ).scalars().all()
     return rows
+
+
+@router.get("/players/{external_id}", response_model=PlayerPublicOut)
+def get_player(
+    external_id: str,
+    db: Session = Depends(get_db),
+    _user_id: str = Depends(get_current_user_id),
+):
+    if external_id.startswith("guest:") or external_id.startswith("profile:"):
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    p = db.execute(select(Player).where(Player.external_id == external_id)).scalars().one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    out = PlayerPublicOut.model_validate(p)
+    out.email = None
+    return out

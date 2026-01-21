@@ -18,6 +18,7 @@ import app.models.course  # noqa: F401
 import app.models.round  # noqa: F401
 import app.models.friend  # noqa: F401
 import app.models.friend_request  # noqa: F401
+import app.models.activity_event  # noqa: F401
 import app.models.tournament  # noqa: F401
 import app.models.tournament_group  # noqa: F401
 import app.models.tournament_member  # noqa: F401

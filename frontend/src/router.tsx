@@ -7,6 +7,7 @@ import MyRounds from "./pages/MyRounds";
 import RoundScorecard from "./pages/RoundScorecard";
 import Profile from "./pages/Profile";
 import Friends from "./pages/Friends";
+import ViewPlayer from "./pages/ViewPlayer";
 import Tournaments from "./pages/Tournaments";
 import Tournament from "./pages/Tournament";
 
@@ -23,6 +24,7 @@ export const router = createBrowserRouter([
       { path: "tournaments", element: <Tournaments /> },
       { path: "tournaments/:tournamentId", element: <Tournament /> },
       { path: "friends", element: <Friends /> },
+      { path: "players/:externalId", element: <ViewPlayer /> },
       { path: "profile", element: <Profile /> },
     ],
   },

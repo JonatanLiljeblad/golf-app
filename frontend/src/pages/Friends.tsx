@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useAuth0 } from "@auth0/auth0-react";
 import { useApi } from "../api/useApi";
 import type { Player } from "../api/types";
@@ -6,6 +7,23 @@ import type { Player } from "../api/types";
 type ApiError = { status: number; body: unknown };
 
 type FriendRequest = { id: number; from_player: Player };
+
+type FriendActivityEvent = {
+  id: number;
+  created_at: string;
+  kind: "birdie" | "eagle" | "albatross" | string;
+  hole_number: number;
+  strokes: number;
+  par: number;
+  player: { external_id: string; username: string | null; name: string | null };
+};
+
+function kindLabel(kind: string): string {
+  if (kind === "birdie") return "a birdie";
+  if (kind === "eagle") return "an eagle";
+  if (kind === "albatross") return "an albatross";
+  return kind;
+}
 
 function label(p: Player): string {
   return p.name || p.username || p.email || p.external_id;
@@ -17,7 +35,10 @@ export default function Friends() {
 
   const [friends, setFriends] = useState<Player[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [activeTab, setActiveTab] = useState<"friends" | "requests">("friends");
+  const [activeTab, setActiveTab] = useState<"friends" | "requests" | "activity">("friends");
+
+  const [activity, setActivity] = useState<FriendActivityEvent[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
 
   const [q, setQ] = useState("");
   const [results, setResults] = useState<Player[]>([]);
@@ -45,6 +66,18 @@ export default function Friends() {
       setRequests(data);
     } catch {
       // ignore
+    }
+  }
+
+  async function loadActivity() {
+    setActivityLoading(true);
+    try {
+      const data = await request<FriendActivityEvent[]>("/api/v1/friends/activity");
+      setActivity(data);
+    } catch {
+      // ignore
+    } finally {
+      setActivityLoading(false);
     }
   }
 
@@ -139,6 +172,16 @@ export default function Friends() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    if (activeTab !== "activity") return;
+
+    void loadActivity();
+    const t = window.setInterval(() => void loadActivity(), 30_000);
+    return () => window.clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, isAuthenticated]);
+
   if (!isAuthenticated) {
     return (
       <div className="auth-card content-narrow">
@@ -183,10 +226,45 @@ export default function Friends() {
             >
               Friend requests{requests.length ? ` (${requests.length})` : ""}
             </button>
+            <button
+              className={activeTab === "activity" ? "auth-btn primary" : "auth-btn secondary"}
+              onClick={() => setActiveTab("activity")}
+            >
+              Activity
+            </button>
           </div>
         </div>
 
-        {activeTab === "friends" ? (
+        {activeTab === "activity" ? (
+          <div style={{ display: "grid", gap: ".5rem" }}>
+            <div className="auth-row" style={{ justifyContent: "space-between" }}>
+              <div style={{ fontWeight: 800 }}>Activity</div>
+              <button className="auth-btn secondary" onClick={() => void loadActivity()} disabled={activityLoading}>
+                {activityLoading ? "Loading…" : "Refresh"}
+              </button>
+            </div>
+
+            {!activity.length && !activityLoading ? (
+              <div className="auth-mono">No recent activity.</div>
+            ) : (
+              <div style={{ display: "grid", gap: ".5rem" }}>
+                {activity.map((ev) => (
+                  <div key={ev.id} className="auth-card" style={{ padding: ".75rem" }}>
+                    <div style={{ fontWeight: 800 }}>
+                      {(ev.player.name || ev.player.username || ev.player.external_id) ?? "Player"} made {kindLabel(ev.kind)}
+                    </div>
+                    <div className="auth-mono">
+                      Hole {ev.hole_number}: {ev.strokes} on par {ev.par}
+                    </div>
+                    <div className="auth-mono" style={{ opacity: 0.75 }}>
+                      {new Date(ev.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeTab === "friends" ? (
           <>
             <div style={{ display: "grid", gap: ".5rem" }}>
               <input
@@ -211,13 +289,18 @@ export default function Friends() {
                       <div style={{ fontWeight: 700 }}>{label(p)}</div>
                       <div className="auth-mono">{p.email ?? p.username ?? p.external_id}</div>
                     </div>
-                    <button
-                      className="auth-btn primary"
-                      disabled={friendIds.has(p.external_id)}
-                      onClick={() => void sendRequest(p.external_id)}
-                    >
-                      {friendIds.has(p.external_id) ? "Friends" : "Send request"}
-                    </button>
+                    <div className="auth-row">
+                      <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(p.external_id)}`}>
+                        View
+                      </Link>
+                      <button
+                        className="auth-btn primary"
+                        disabled={friendIds.has(p.external_id)}
+                        onClick={() => void sendRequest(p.external_id)}
+                      >
+                        {friendIds.has(p.external_id) ? "Friends" : "Send request"}
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -236,6 +319,9 @@ export default function Friends() {
                     <div className="auth-mono">{r.from_player.email ?? r.from_player.username ?? r.from_player.external_id}</div>
                   </div>
                   <div className="auth-row">
+                    <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(r.from_player.external_id)}`}>
+                      View
+                    </Link>
                     <button className="auth-btn primary" onClick={() => void acceptRequest(r.id)}>
                       Accept
                     </button>
@@ -271,9 +357,14 @@ export default function Friends() {
                   <div style={{ fontWeight: 700 }}>{label(f)}</div>
                   <div className="auth-mono">{f.email ?? f.username ?? f.external_id}</div>
                 </div>
-                <button className="auth-btn secondary" onClick={() => void removeFriend(f.external_id)}>
-                  Remove
-                </button>
+                <div className="auth-row">
+                  <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(f.external_id)}`}>
+                    View
+                  </Link>
+                  <button className="auth-btn secondary" onClick={() => void removeFriend(f.external_id)}>
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
