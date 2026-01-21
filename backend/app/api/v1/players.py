@@ -2,12 +2,14 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
+from app.models.course import Hole
 from app.models.player import Player
+from app.models.round import HoleScore, Round
 
 router = APIRouter()
 
@@ -24,8 +26,14 @@ class PlayerPublicOut(BaseModel):
         from_attributes = True
 
 
+class PlayerStatsOut(BaseModel):
+    rounds_count: int
+    avg_strokes: float | None
+
+
 class PlayerMeOut(PlayerPublicOut):
-    pass
+    rounds_count: int | None = None
+    avg_strokes: float | None = None
 
 
 class PlayerMeUpdateIn(BaseModel):
@@ -42,6 +50,23 @@ class PlayerCreateIn(BaseModel):
     handicap: float | None = None
 
 
+def _player_stats(db: Session, player_id: int) -> PlayerStatsOut:
+    per_round = (
+        select(func.sum(HoleScore.strokes).label("total_strokes"))
+        .select_from(HoleScore)
+        .join(Round, Round.id == HoleScore.round_id)
+        .where(HoleScore.player_id == player_id, Round.completed_at.isnot(None))
+        .group_by(HoleScore.round_id)
+    ).subquery()
+
+    rounds_count = db.execute(select(func.count()).select_from(per_round)).scalar_one()
+    avg = db.execute(select(func.avg(per_round.c.total_strokes))).scalar_one()
+    return PlayerStatsOut(
+        rounds_count=int(rounds_count or 0),
+        avg_strokes=(float(avg) if avg is not None else None),
+    )
+
+
 @router.get("/players/me", response_model=PlayerMeOut)
 def upsert_me(
     db: Session = Depends(get_db),
@@ -50,7 +75,12 @@ def upsert_me(
     player = ensure_player(db, user_id)
     db.commit()
     db.refresh(player)
-    return player
+
+    stats = _player_stats(db, player.id)
+    out = PlayerMeOut.model_validate(player)
+    out.rounds_count = stats.rounds_count
+    out.avg_strokes = stats.avg_strokes
+    return out
 
 
 @router.patch("/players/me", response_model=PlayerMeOut)
@@ -86,7 +116,11 @@ def update_me(
         raise HTTPException(status_code=409, detail="email/username already in use")
 
     db.refresh(player)
-    return player
+    stats = _player_stats(db, player.id)
+    out = PlayerMeOut.model_validate(player)
+    out.rounds_count = stats.rounds_count
+    out.avg_strokes = stats.avg_strokes
+    return out
 
 
 @router.post("/players", response_model=PlayerPublicOut, status_code=201)
@@ -179,3 +213,19 @@ def get_player(
     out = PlayerPublicOut.model_validate(p)
     out.email = None
     return out
+
+
+@router.get("/players/{external_id}/stats", response_model=PlayerStatsOut)
+def get_player_stats(
+    external_id: str,
+    db: Session = Depends(get_db),
+    _user_id: str = Depends(get_current_user_id),
+):
+    if external_id.startswith("guest:") or external_id.startswith("profile:"):
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    p = db.execute(select(Player).where(Player.external_id == external_id)).scalars().one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    return _player_stats(db, p.id)

@@ -11,7 +11,7 @@ type FriendRequest = { id: number; from_player: Player };
 type FriendActivityEvent = {
   id: number;
   created_at: string;
-  kind: "birdie" | "eagle" | "albatross" | string;
+  kind: "birdie" | "eagle" | "albatross" | "pb_overall" | "pb_course" | string;
   hole_number: number;
   strokes: number;
   par: number;
@@ -22,7 +22,15 @@ function kindLabel(kind: string): string {
   if (kind === "birdie") return "a birdie";
   if (kind === "eagle") return "an eagle";
   if (kind === "albatross") return "an albatross";
+  if (kind === "pb_overall") return "a personal best (overall)";
+  if (kind === "pb_course") return "a personal best (course)";
   return kind;
+}
+
+function scoreToParLabel(strokes: number, par: number): string {
+  const d = strokes - par;
+  if (d === 0) return "E";
+  return d > 0 ? `+${d}` : String(d);
 }
 
 function label(p: Player): string {
@@ -253,9 +261,15 @@ export default function Friends() {
                     <div style={{ fontWeight: 800 }}>
                       {(ev.player.name || ev.player.username || ev.player.external_id) ?? "Player"} made {kindLabel(ev.kind)}
                     </div>
-                    <div className="auth-mono">
-                      Hole {ev.hole_number}: {ev.strokes} on par {ev.par}
-                    </div>
+                    {ev.hole_number === 0 ? (
+                      <div className="auth-mono">
+                        Round: {ev.strokes} on par {ev.par} ({scoreToParLabel(ev.strokes, ev.par)})
+                      </div>
+                    ) : (
+                      <div className="auth-mono">
+                        Hole {ev.hole_number}: {ev.strokes} on par {ev.par}
+                      </div>
+                    )}
                     <div className="auth-mono" style={{ opacity: 0.75 }}>
                       {new Date(ev.created_at).toLocaleString()}
                     </div>

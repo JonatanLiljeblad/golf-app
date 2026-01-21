@@ -5,6 +5,8 @@ import type { Player } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
 
+type PlayerStats = { rounds_count: number; avg_strokes: number | null };
+
 function label(p: Player): string {
   return p.name || p.username || p.external_id;
 }
@@ -13,17 +15,8 @@ export default function ViewPlayer() {
   const { externalId } = useParams();
   const { request } = useApi();
 
-  if (!externalId) {
-    return (
-      <div className="page content-narrow">
-        <div className="auth-card">
-          <div className="auth-mono">Missing player id.</div>
-        </div>
-      </div>
-    );
-  }
-
   const [player, setPlayer] = useState<Player | null>(null);
+  const [stats, setStats] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<string | null>(null);
 
@@ -33,8 +26,12 @@ export default function ViewPlayer() {
       setApiError(null);
       setLoading(true);
       try {
-        const data = await request<Player>(`/api/v1/players/${encodeURIComponent(externalId)}`);
+        const [data, s] = await Promise.all([
+          request<Player>(`/api/v1/players/${encodeURIComponent(externalId)}`),
+          request<PlayerStats>(`/api/v1/players/${encodeURIComponent(externalId)}/stats`),
+        ]);
         setPlayer(data);
+        setStats(s);
       } catch (e) {
         const err = e as ApiError;
         setApiError(`Failed to load player (${err.status}).`);
@@ -46,6 +43,16 @@ export default function ViewPlayer() {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [externalId]);
+
+  if (!externalId) {
+    return (
+      <div className="page content-narrow">
+        <div className="auth-card">
+          <div className="auth-mono">Missing player id.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page content-narrow">
@@ -89,6 +96,16 @@ export default function ViewPlayer() {
               <div>
                 <div style={{ fontWeight: 700 }}>Handicap</div>
                 <div className="auth-mono">{player.handicap ?? "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700 }}>Rounds</div>
+                <div className="auth-mono">{stats?.rounds_count ?? "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700 }}>Avg strokes</div>
+                <div className="auth-mono">
+                  {stats?.avg_strokes == null ? "—" : stats.avg_strokes.toFixed(1)}
+                </div>
               </div>
             </div>
 

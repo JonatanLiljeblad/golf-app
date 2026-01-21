@@ -154,6 +154,18 @@ export default function Profile() {
 
         {isAuthenticated && me && (
           <div style={{ display: "grid", gap: ".5rem", marginTop: "1rem" }}>
+            <div className="auth-row" style={{ gap: "1.25rem" }}>
+              <div>
+                <div style={{ fontWeight: 700 }}>Rounds</div>
+                <div className="auth-mono">{me.rounds_count ?? "—"}</div>
+              </div>
+              <div>
+                <div style={{ fontWeight: 700 }}>Avg strokes</div>
+                <div className="auth-mono">
+                  {me.avg_strokes == null ? "—" : me.avg_strokes.toFixed(1)}
+                </div>
+              </div>
+            </div>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Email *</span>
               <input

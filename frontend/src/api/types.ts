@@ -30,6 +30,13 @@ export type Player = {
   username: string | null;
   name: string | null;
   handicap: number | null;
+  rounds_count?: number;
+  avg_strokes?: number | null;
+};
+
+export type PlayerStats = {
+  rounds_count: number;
+  avg_strokes: number | null;
 };
 
 export type Round = {

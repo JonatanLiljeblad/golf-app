@@ -4,12 +4,12 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from pydantic.config import ConfigDict
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import ensure_player, get_current_user_id, get_db
-from app.models.course import Course
+from app.models.course import Course, Hole
 from app.models.player import Player
 from app.models.activity_event import ActivityEvent
 from app.models.round import HoleScore, Round, RoundParticipant
@@ -433,6 +433,7 @@ def submit_score(
         db.delete(existing_event)
 
     # Auto-complete once every player has a score for every hole.
+    just_completed = False
     if rnd.completed_at is None:
         participant_ids = list(participant_by_external_id.values())
         existing = db.execute(
@@ -453,6 +454,125 @@ def submit_score(
         need = {(pid, hn) for pid in participant_ids for hn in valid_numbers}
         if need.issubset(have):
             rnd.completed_at = datetime.now(timezone.utc)
+            just_completed = True
+
+    if just_completed:
+        total_par = sum(h.par for h in rnd.course.holes)
+
+        totals = db.execute(
+            select(HoleScore.player_id, func.sum(HoleScore.strokes))
+            .where(HoleScore.round_id == round_id)
+            .group_by(HoleScore.player_id)
+        ).all()
+        total_strokes_by_player_id = {pid: int(s or 0) for pid, s in totals}
+
+        # Emit PB events on round completion for each real player in the round.
+        for pid in set(total_strokes_by_player_id.keys()):
+            p = db.execute(select(Player).where(Player.id == pid)).scalars().one_or_none()
+            if not p or p.external_id.startswith("guest:"):
+                continue
+
+            round_strokes = total_strokes_by_player_id.get(pid)
+            if round_strokes is None:
+                continue
+            score_to_par = round_strokes - total_par
+
+            # Overall PB: best (lowest) score_to_par across completed rounds.
+            overall_scores = (
+                select(
+                    (func.sum(HoleScore.strokes) - func.sum(Hole.par)).label("score_to_par")
+                )
+                .select_from(HoleScore)
+                .join(Round, Round.id == HoleScore.round_id)
+                .join(
+                    Hole,
+                    (Hole.course_id == Round.course_id)
+                    & (Hole.number == HoleScore.hole_number),
+                )
+                .where(
+                    HoleScore.player_id == pid,
+                    Round.completed_at.isnot(None),
+                    Round.id != round_id,
+                )
+                .group_by(HoleScore.round_id)
+            ).subquery()
+
+            prev_best_overall = db.execute(
+                select(func.min(overall_scores.c.score_to_par))
+            ).scalars().one()
+
+            if prev_best_overall is None or score_to_par < int(prev_best_overall):
+                existing_pb = db.execute(
+                    select(ActivityEvent).where(
+                        ActivityEvent.round_id == round_id,
+                        ActivityEvent.player_id == pid,
+                        ActivityEvent.hole_number == 0,
+                        ActivityEvent.kind == "pb_overall",
+                    )
+                ).scalars().one_or_none()
+                if existing_pb:
+                    existing_pb.strokes = round_strokes
+                    existing_pb.par = total_par
+                else:
+                    db.add(
+                        ActivityEvent(
+                            player_id=pid,
+                            round_id=round_id,
+                            hole_number=0,
+                            strokes=round_strokes,
+                            par=total_par,
+                            kind="pb_overall",
+                        )
+                    )
+
+            # Course PB: best (lowest) score_to_par on same course across completed rounds.
+            course_scores = (
+                select(
+                    (func.sum(HoleScore.strokes) - func.sum(Hole.par)).label("score_to_par")
+                )
+                .select_from(HoleScore)
+                .join(Round, Round.id == HoleScore.round_id)
+                .join(
+                    Hole,
+                    (Hole.course_id == Round.course_id)
+                    & (Hole.number == HoleScore.hole_number),
+                )
+                .where(
+                    HoleScore.player_id == pid,
+                    Round.completed_at.isnot(None),
+                    Round.course_id == rnd.course_id,
+                    Round.id != round_id,
+                )
+                .group_by(HoleScore.round_id)
+            ).subquery()
+
+            prev_best_course = db.execute(
+                select(func.min(course_scores.c.score_to_par))
+            ).scalars().one()
+
+            if prev_best_course is None or score_to_par < int(prev_best_course):
+                existing_pb = db.execute(
+                    select(ActivityEvent).where(
+                        ActivityEvent.round_id == round_id,
+                        ActivityEvent.player_id == pid,
+                        ActivityEvent.hole_number == 0,
+                        ActivityEvent.kind == "pb_course",
+                    )
+                ).scalars().one_or_none()
+                if existing_pb:
+                    existing_pb.strokes = round_strokes
+                    existing_pb.par = total_par
+                else:
+                    db.add(
+                        ActivityEvent(
+                            player_id=pid,
+                            round_id=round_id,
+                            hole_number=0,
+                            strokes=round_strokes,
+                            par=total_par,
+                            kind="pb_course",
+                        )
+                    )
 
     db.commit()
     return HoleScoreOut(

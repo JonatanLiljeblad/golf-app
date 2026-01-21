@@ -10,7 +10,11 @@ class ActivityEvent(Base):
     __tablename__ = "activity_events"
     __table_args__ = (
         UniqueConstraint(
-            "round_id", "player_id", "hole_number", name="uq_activity_round_player_hole"
+            "round_id",
+            "player_id",
+            "hole_number",
+            "kind",
+            name="uq_activity_round_player_hole",
         ),
     )
 
