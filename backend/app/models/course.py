@@ -18,6 +18,11 @@ class Course(Base):
 
     owner = relationship("Player")
 
+    @property
+    def owner_id(self) -> str:
+        # External identity (Auth0 `sub` in prod, X-User-Id in dev).
+        return self.owner.external_id if self.owner else ""
+
     holes: Mapped[list["Hole"]] = relationship(
         back_populates="course",
         cascade="all, delete-orphan",
@@ -63,6 +68,10 @@ class CourseTee(Base):
     tee_name: Mapped[str] = mapped_column(String(64), nullable=False)
     course_rating: Mapped[float | None] = mapped_column(Float, nullable=True)
     slope_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    course_rating_men: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slope_rating_men: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    course_rating_women: Mapped[float | None] = mapped_column(Float, nullable=True)
+    slope_rating_women: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     course: Mapped["Course"] = relationship(back_populates="tees")
     hole_distances: Mapped[list["TeeHoleDistance"]] = relationship(

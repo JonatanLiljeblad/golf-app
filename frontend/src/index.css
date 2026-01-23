@@ -339,7 +339,9 @@ button.player-slot.add:disabled {
   width: 100%;
   max-width: 520px;
   max-height: calc(100vh - 2rem);
-  overflow: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .modal-card--wide {
@@ -575,6 +577,16 @@ button.player-slot.add:disabled {
   font-size: 0.98rem;
   line-height: 1.1;
   white-space: nowrap;
+  position: relative;
+}
+
+.hole-hcpbadge {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 6px;
+  padding: 1px 4px;
+  line-height: 1;
 }
 
 .scorecard-table thead th {

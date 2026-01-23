@@ -41,6 +41,7 @@ export default function Profile() {
   const [username, setUsername] = useState("");
   const [name, setName] = useState("");
   const [handicap, setHandicap] = useState<string>("");
+  const [gender, setGender] = useState<"men" | "women" | "">("");
 
   async function loadMe() {
     setApiError(null);
@@ -52,6 +53,7 @@ export default function Profile() {
       setUsername(data.username ?? "");
       setName(data.name ?? "");
       setHandicap(formatHandicapForInput(data.handicap));
+      setGender((data.gender as any) ?? "");
     } catch (e) {
       const err = e as ApiError;
       setApiError(`Failed to load profile (${err.status}).`);
@@ -71,6 +73,7 @@ export default function Profile() {
           username: username.trim() || null,
           name: name.trim() || null,
           handicap: h,
+          gender: gender || null,
         }),
       });
       setMe(updated);
@@ -191,6 +194,14 @@ export default function Profile() {
                 onChange={(e) => setHandicap(e.target.value)}
                 placeholder="e.g. 12.4 or +0.1"
               />
+            </label>
+            <label style={{ display: "grid", gap: ".25rem" }}>
+              <span style={{ fontWeight: 700 }}>Gender</span>
+              <select value={gender} onChange={(e) => setGender(e.target.value as any)}>
+                <option value="">—</option>
+                <option value="men">Men</option>
+                <option value="women">Women</option>
+              </select>
             </label>
 
             <button

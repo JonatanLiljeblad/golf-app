@@ -19,6 +19,7 @@ class Player(Base):
     username: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str | None] = mapped_column(String(128))
     handicap: Mapped[float | None] = mapped_column(Float)
+    gender: Mapped[str | None] = mapped_column(String(16))
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

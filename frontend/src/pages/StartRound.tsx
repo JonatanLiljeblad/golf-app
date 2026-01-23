@@ -6,7 +6,7 @@ import type { Course, Player, Round } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
 
-type GuestPlayer = { name: string; handicap: number | null };
+type GuestPlayer = { name: string; handicap: number | null; gender: "men" | "women" | null };
 
 function parseHandicapFromInput(raw: string): number | null {
   const s = raw.trim();
@@ -55,6 +55,7 @@ export default function StartRound() {
 
   const [guestName, setGuestName] = useState("");
   const [guestHandicap, setGuestHandicap] = useState("");
+  const [guestGender, setGuestGender] = useState<"men" | "women" | "">("");
   const [guestPlayers, setGuestPlayers] = useState<GuestPlayer[]>([]);
 
   const [tournamentId, setTournamentId] = useState<number | null>(null);
@@ -114,13 +115,13 @@ export default function StartRound() {
         .filter(Boolean);
 
       const player_ids = Array.from(new Set([...friendPlayerIds, ...manual_ids]));
-      const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap }));
+      const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap, gender: g.gender }));
 
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
         body: JSON.stringify({
           course_id: selectedCourseId,
-          tee_id: selectedTeeId || undefined,
+          tee_id: selectedTeeId,
           stats_enabled: statsEnabled,
           player_ids,
           guest_players,
@@ -233,9 +234,10 @@ export default function StartRound() {
       setError("max 4 players");
       return;
     }
-    setGuestPlayers((prev) => [...prev, { name: n, handicap: parseHandicapFromInput(guestHandicap) }]);
+    setGuestPlayers((prev) => [...prev, { name: n, handicap: parseHandicapFromInput(guestHandicap), gender: guestGender || null }]);
     setGuestName("");
     setGuestHandicap("");
+    setGuestGender("");
   }
 
   const slots = useMemo(() => {
@@ -322,9 +324,9 @@ export default function StartRound() {
 
         {!!tees.length && (
           <label style={{ display: "grid", gap: ".25rem" }}>
-            <span style={{ fontWeight: 700 }}>Tee</span>
-            <select value={selectedTeeId ?? ""} onChange={(e) => setSelectedTeeId(Number(e.target.value))}>
-              <option value="">Default</option>
+            <span style={{ fontWeight: 700 }}>Tee *</span>
+            <select value={selectedTeeId ?? ""} onChange={(e) => setSelectedTeeId(e.target.value ? Number(e.target.value) : null)}>
+              <option value="">Select tee…</option>
               {tees.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.tee_name}
@@ -529,6 +531,11 @@ export default function StartRound() {
                       onChange={(e) => setGuestHandicap(e.target.value)}
                       placeholder="Guest handicap (optional, e.g. +0.1)"
                     />
+                    <select value={guestGender} onChange={(e) => setGuestGender(e.target.value as any)}>
+                      <option value="">Gender…</option>
+                      <option value="men">Men</option>
+                      <option value="women">Women</option>
+                    </select>
                     <div className="auth-row" style={{ justifyContent: "space-between" }}>
                       <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
                         Back
@@ -609,7 +616,7 @@ export default function StartRound() {
 
         <button
           className="auth-btn primary"
-          disabled={!selectedCourseId || !!loading}
+          disabled={!selectedCourseId || !selectedTeeId || !!loading}
           onClick={() => void startRound()}
         >
           Start round

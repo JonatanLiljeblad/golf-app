@@ -352,6 +352,11 @@ export default function RoundScorecard() {
                   {round.course_name} · Round #{round.id}
                 </div>
                 <div className="auth-mono">Par {round.total_par}</div>
+                {!!round.course_handicap_by_player && viewerId && (
+                  <div className="auth-mono">
+                    Course hcp: {round.course_handicap_by_player[viewerId] ?? 0}
+                  </div>
+                )}
                 <div className="auth-mono">
                   {round.completed_at ? "Completed" : "In progress"} · Your strokes: {round.total_strokes ?? "—"}
                   {statsEnabled ? " · Stats: On" : " · Stats: Off"}
@@ -604,10 +609,30 @@ export default function RoundScorecard() {
                                           : undefined
                                       }
                                     >
-                                      {(() => {
-                                        const v = h.strokes?.[pid] ?? null;
-                                        return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
-                                      })()}
+                                      <div style={{ position: "relative", minHeight: 18 }}>
+                                        {(() => {
+                                          const hs = h.handicap_strokes?.[pid] ?? 0;
+                                          return hs ? (
+                                            <div
+                                              className="hole-hcpbadge"
+                                              style={{
+                                                position: "absolute",
+                                                top: -2,
+                                                right: -2,
+                                                fontSize: ".7rem",
+                                                fontWeight: 900,
+                                                opacity: 0.95,
+                                              }}
+                                            >
+                                              {hs > 0 ? `+${hs}` : `${hs}`}
+                                            </div>
+                                          ) : null;
+                                        })()}
+                                        {(() => {
+                                          const v = h.strokes?.[pid] ?? null;
+                                          return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
+                                        })()}
+                                      </div>
                                     </td>
                                   ))}
                                   <td className="auth-mono">{out ?? "—"}</td>
@@ -664,10 +689,30 @@ export default function RoundScorecard() {
                                             : undefined
                                         }
                                       >
-                                        {(() => {
-                                          const v = h.strokes?.[pid] ?? null;
-                                          return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
-                                        })()}
+                                        <div style={{ position: "relative", minHeight: 18 }}>
+                                          {(() => {
+                                            const hs = h.handicap_strokes?.[pid] ?? 0;
+                                            return hs ? (
+                                              <div
+                                                className="hole-hcpbadge"
+                                                style={{
+                                                  position: "absolute",
+                                                  top: -2,
+                                                  right: -2,
+                                                  fontSize: ".7rem",
+                                                  fontWeight: 900,
+                                                  opacity: 0.95,
+                                                }}
+                                              >
+                                                {hs > 0 ? `+${hs}` : `${hs}`}
+                                              </div>
+                                            ) : null;
+                                          })()}
+                                          {(() => {
+                                            const v = h.strokes?.[pid] ?? null;
+                                            return v != null ? <ScoreMark strokes={v} par={h.par} /> : "";
+                                          })()}
+                                        </div>
                                       </td>
                                     ))}
                                     <td className="auth-mono">{inn ?? "—"}</td>

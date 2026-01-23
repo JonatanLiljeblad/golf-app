@@ -21,6 +21,7 @@ class PlayerPublicOut(BaseModel):
     username: str | None
     name: str | None
     handicap: float | None
+    gender: str | None
 
     class Config:
         from_attributes = True
@@ -41,6 +42,7 @@ class PlayerMeUpdateIn(BaseModel):
     username: str | None = None
     name: str | None = None
     handicap: float | None = None
+    gender: str | None = None
 
 
 class PlayerCreateIn(BaseModel):
@@ -127,6 +129,10 @@ def update_me(
 
     if payload.handicap is not None:
         player.handicap = payload.handicap
+
+    if payload.gender is not None:
+        v = (payload.gender or "").strip().lower()
+        player.gender = v or None
 
     if not player.email or not player.username:
         raise HTTPException(status_code=400, detail="email and username required")

@@ -47,9 +47,16 @@ def test_group_round_owner_can_enter_scores_for_all(client):
     client.get("/api/v1/players/me", headers={"X-User-Id": "u2"})
     client.get("/api/v1/players/me", headers={"X-User-Id": "u3"})
 
+    db = next(app.dependency_overrides[get_db]())
+    from app.models.course import CourseTee
+
+    tee = CourseTee(course_id=c["id"], tee_name="Default")
+    db.add(tee)
+    db.commit()
+
     r = client.post(
         "/api/v1/rounds",
-        json={"course_id": c["id"], "player_ids": ["u2", "u3"]},
+        json={"course_id": c["id"], "tee_id": tee.id, "player_ids": ["u2", "u3"]},
         headers={"X-User-Id": "u1"},
     )
     assert r.status_code == 201
@@ -83,9 +90,16 @@ def test_group_round_non_owner_cannot_enter_scores_for_others(client):
 
     client.get("/api/v1/players/me", headers={"X-User-Id": "u2"})
 
+    db = next(app.dependency_overrides[get_db]())
+    from app.models.course import CourseTee
+
+    tee = CourseTee(course_id=c["id"], tee_name="Default")
+    db.add(tee)
+    db.commit()
+
     r = client.post(
         "/api/v1/rounds",
-        json={"course_id": c["id"], "player_ids": ["u2"]},
+        json={"course_id": c["id"], "tee_id": tee.id, "player_ids": ["u2"]},
         headers={"X-User-Id": "u1"},
     )
     assert r.status_code == 201

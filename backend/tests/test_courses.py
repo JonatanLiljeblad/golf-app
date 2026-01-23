@@ -84,9 +84,21 @@ def test_cannot_archive_course_with_active_rounds(client):
     course = resp.json()
 
     # Another user starts a round on the same course.
+    db_gen = app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    from app.models.course import CourseTee
+
+    try:
+        tee = CourseTee(course_id=course["id"], tee_name="Default")
+        db.add(tee)
+        db.commit()
+        db.refresh(tee)
+    finally:
+        db_gen.close()
+
     r = client.post(
         "/api/v1/rounds",
-        json={"course_id": course["id"]},
+        json={"course_id": course["id"], "tee_id": tee.id},
         headers={"X-User-Id": "u2"},
     )
     assert r.status_code == 201

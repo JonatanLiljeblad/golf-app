@@ -1,5 +1,77 @@
+from __future__ import annotations
+
 from datetime import datetime, timezone
 from uuid import uuid4
+import math
+
+
+def _round_half_away_from_zero(x: float) -> int:
+    if x >= 0:
+        return int(math.floor(x + 0.5))
+    return -int(math.floor(abs(x) + 0.5))
+
+
+def _tee_numbers_for_gender(tee: CourseTee, gender: str | None) -> tuple[float | None, int | None]:
+    g = (gender or "").strip().lower()
+
+    if g == "women":
+        if tee.course_rating_women is not None and tee.slope_rating_women is not None:
+            return tee.course_rating_women, tee.slope_rating_women
+
+    if g == "men":
+        if tee.course_rating_men is not None and tee.slope_rating_men is not None:
+            return tee.course_rating_men, tee.slope_rating_men
+
+    # Fallbacks for legacy data.
+    if tee.course_rating is not None and tee.slope_rating is not None:
+        return tee.course_rating, tee.slope_rating
+
+    if tee.course_rating_men is not None and tee.slope_rating_men is not None:
+        return tee.course_rating_men, tee.slope_rating_men
+
+    if tee.course_rating_women is not None and tee.slope_rating_women is not None:
+        return tee.course_rating_women, tee.slope_rating_women
+
+    return None, None
+
+
+def _course_handicap(
+    handicap_index: float | None,
+    *,
+    slope_rating: int | None,
+    course_rating: float | None,
+    course_par: int,
+) -> int:
+    if slope_rating is None or course_rating is None:
+        return 0
+
+    hi = float(handicap_index or 0.0)
+    raw = hi * (float(slope_rating) / 113.0) + (float(course_rating) - float(course_par))
+    return _round_half_away_from_zero(raw)
+
+
+def _allocate_strokes(
+    course_handicap_by_player: dict[str, int],
+    *,
+    hole_numbers_by_hcp_rank: list[int],
+    holes_count: int,
+) -> dict[int, dict[str, int]]:
+    out: dict[int, dict[str, int]] = {hn: {} for hn in hole_numbers_by_hcp_rank}
+
+    for pid, ch in course_handicap_by_player.items():
+        base = int(math.trunc(ch / float(holes_count)))
+        rem = int(ch - (base * holes_count))
+
+        for hn in hole_numbers_by_hcp_rank:
+            out[hn][pid] = base
+
+        if rem:
+            step = 1 if rem > 0 else -1
+            for i in range(abs(rem)):
+                hn = hole_numbers_by_hcp_rank[i % holes_count]
+                out[hn][pid] = out[hn][pid] + step
+
+    return out
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -22,11 +94,12 @@ router = APIRouter()
 class GuestPlayerIn(BaseModel):
     name: str
     handicap: float | None = None
+    gender: str | None = None
 
 
 class RoundCreate(BaseModel):
     course_id: int
-    tee_id: int | None = None
+    tee_id: int
     stats_enabled: bool = False
     player_ids: list[str] | None = None
     guest_players: list[GuestPlayerIn] | None = None
@@ -65,6 +138,7 @@ class ScorecardHole(BaseModel):
     putts: dict[str, int | None] | None = None
     fairway: dict[str, str | None] | None = None
     gir: dict[str, str | None] | None = None
+    handicap_strokes: dict[str, int] | None = None
 
 
 class RoundPlayerOut(BaseModel):
@@ -74,6 +148,7 @@ class RoundPlayerOut(BaseModel):
     username: str | None
     name: str | None
     handicap: float | None
+    gender: str | None
 
 
 class TeeSummaryOut(BaseModel):
@@ -87,6 +162,7 @@ class RoundOut(BaseModel):
     course_name: str
     tee_id: int | None
     tee: TeeSummaryOut | None = None
+    course_handicap_by_player: dict[str, int]
     tournament_id: int | None
     tournament_completed_at: datetime | None
     tournament_paused_at: datetime | None
@@ -168,16 +244,11 @@ def create_round(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
 
-    tee = None
-    if payload.tee_id is not None:
-        tee = db.execute(
-            select(CourseTee)
-            .where(CourseTee.id == payload.tee_id)
-        ).scalars().one_or_none()
-        if not tee:
-            raise HTTPException(status_code=404, detail="Tee not found")
-        if tee.course_id != course.id:
-            raise HTTPException(status_code=400, detail="tee_id does not belong to course")
+    tee = db.execute(select(CourseTee).where(CourseTee.id == payload.tee_id)).scalars().one_or_none()
+    if not tee:
+        raise HTTPException(status_code=404, detail="Tee not found")
+    if tee.course_id != course.id:
+        raise HTTPException(status_code=400, detail="tee_id does not belong to course")
 
     players: list[Player] = [owner]
 
@@ -223,7 +294,7 @@ def create_round(
         n = (gp.name or "").strip()
         if not n:
             raise HTTPException(status_code=400, detail="Guest name required")
-        guest = Player(external_id=f"guest:{uuid4()}", name=n, handicap=gp.handicap)
+        guest = Player(external_id=f"guest:{uuid4()}", name=n, handicap=gp.handicap, gender=gp.gender)
         db.add(guest)
         db.flush()
         players.append(guest)
@@ -747,6 +818,41 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         if tee:
             tee_distance_by_hole = {d.hole_number: d.distance for d in (tee.hole_distances or [])}
 
+    holes_count = len(rnd.course.holes)
+    hole_hcp_pairs = [(h.number, h.hcp) for h in rnd.course.holes if h.hcp is not None]
+    hole_hcp_pairs_sorted = sorted(hole_hcp_pairs, key=lambda x: x[1])
+    hole_numbers_by_hcp_rank = [hn for hn, _hcp in hole_hcp_pairs_sorted]
+
+    # If HCP isn't fully configured, fall back to hole order.
+    if len(hole_numbers_by_hcp_rank) != holes_count:
+        hole_numbers_by_hcp_rank = [h.number for h in sorted(rnd.course.holes, key=lambda x: x.number)]
+
+    course_par = sum(h.par for h in rnd.course.holes)
+
+    course_handicap_by_player: dict[str, int] = {}
+    if tee is not None:
+        for p in rnd.participants:
+            pid = p.player.external_id
+            cr, sr = _tee_numbers_for_gender(tee, p.player.gender)
+            course_handicap_by_player[pid] = _course_handicap(
+                p.player.handicap,
+                slope_rating=sr,
+                course_rating=cr,
+                course_par=course_par,
+            )
+    else:
+        course_handicap_by_player = {pid: 0 for pid in participant_ids}
+
+    for pid in participant_ids:
+        if pid not in course_handicap_by_player:
+            course_handicap_by_player[pid] = 0
+
+    per_hole_alloc = _allocate_strokes(
+        course_handicap_by_player,
+        hole_numbers_by_hcp_rank=hole_numbers_by_hcp_rank,
+        holes_count=holes_count,
+    )
+
     holes = []
     for h in rnd.course.holes:
         hole_kwargs = dict(
@@ -767,6 +873,10 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
                 pid: gir_by_hole.get(h.number, {}).get(pid) for pid in participant_ids
             }
 
+        hole_kwargs["handicap_strokes"] = {
+            pid: per_hole_alloc.get(h.number, {}).get(pid, 0) for pid in participant_ids
+        }
+
         holes.append(ScorecardHole(**hole_kwargs))
 
     total_par, owner_total, totals_by_player = _compute_totals(
@@ -781,6 +891,7 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
             username=p.player.username,
             name=p.player.name,
             handicap=p.player.handicap,
+            gender=p.player.gender,
         )
         for p in rnd.participants
     ]
@@ -814,6 +925,7 @@ def _round_to_out(db: Session, round_id: int, player_id: int) -> RoundOut:
         completed_at=rnd.completed_at,
         stats_enabled=bool(rnd.stats_enabled),
         holes=holes,
+        course_handicap_by_player=course_handicap_by_player,
         total_par=total_par,
         total_strokes=owner_total,
         total_strokes_by_player=totals_by_player,

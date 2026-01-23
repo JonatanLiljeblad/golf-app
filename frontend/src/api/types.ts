@@ -14,6 +14,7 @@ export type TeeSummary = {
 export type Course = {
   id: number;
   name: string;
+  owner_id: string;
   holes: Hole[];
   tees?: TeeSummary[];
 };
@@ -27,6 +28,7 @@ export type RoundHole = {
   putts?: Record<string, number | null> | null;
   fairway?: Record<string, string | null> | null;
   gir?: Record<string, string | null> | null;
+  handicap_strokes?: Record<string, number> | null;
 };
 
 export type Player = {
@@ -36,6 +38,7 @@ export type Player = {
   username: string | null;
   name: string | null;
   handicap: number | null;
+  gender?: "men" | "women" | null;
   rounds_count?: number;
   avg_strokes?: number | null;
 };
@@ -51,6 +54,7 @@ export type Round = {
   course_name: string;
   tee_id?: number | null;
   tee?: TeeSummary | null;
+  course_handicap_by_player?: Record<string, number>;
   tournament_id: number | null;
   tournament_completed_at?: string | null;
   tournament_paused_at?: string | null;

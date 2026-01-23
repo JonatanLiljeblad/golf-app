@@ -36,6 +36,10 @@ class TeeIn(BaseModel):
     tee_name: str = Field(min_length=1, max_length=64)
     course_rating: float | None = None
     slope_rating: int | None = None
+    course_rating_men: float | None = None
+    slope_rating_men: int | None = None
+    course_rating_women: float | None = None
+    slope_rating_women: int | None = None
     hole_distances: list[TeeHoleDistanceIn]
 
 
@@ -95,6 +99,7 @@ class TeeSummaryOut(BaseModel):
 class CourseOut(BaseModel):
     id: int
     name: str
+    owner_id: str
     holes: list[HoleOut]
     tees: list[TeeSummaryOut] = []
 
@@ -120,6 +125,10 @@ def create_course(
                 tee_name=t.tee_name.strip(),
                 course_rating=t.course_rating,
                 slope_rating=t.slope_rating,
+                course_rating_men=t.course_rating_men,
+                slope_rating_men=t.slope_rating_men,
+                course_rating_women=t.course_rating_women,
+                slope_rating_women=t.slope_rating_women,
                 hole_distances=[
                     TeeHoleDistance(hole_number=d.hole_number, distance=d.distance)
                     for d in sorted(t.hole_distances, key=lambda x: x.hole_number)
@@ -133,7 +142,7 @@ def create_course(
 
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes), joinedload(Course.tees))
+        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.id == course.id)
     )
     return db.execute(stmt).scalars().unique().one()
@@ -146,7 +155,7 @@ def list_courses(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes), joinedload(Course.tees))
+        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.archived_at.is_(None))
         .order_by(Course.id)
     )
@@ -161,7 +170,7 @@ def get_course(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.holes), joinedload(Course.tees))
+        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
         .where(Course.id == course_id, Course.archived_at.is_(None))
     )
     course = db.execute(stmt).scalars().unique().one_or_none()

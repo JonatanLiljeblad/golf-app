@@ -44,8 +44,21 @@ def test_round_flow(client):
         "/api/v1/courses", json=course_payload, headers={"X-User-Id": "u1"}
     ).json()
 
+    # Add a tee directly via DB (tee selection required).
+    db_gen = app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    from app.models.course import CourseTee
+
+    try:
+        tee = CourseTee(course_id=c["id"], tee_name="Default")
+        db.add(tee)
+        db.commit()
+        db.refresh(tee)
+    finally:
+        db_gen.close()
+
     r = client.post(
-        "/api/v1/rounds", json={"course_id": c["id"]}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": c["id"], "tee_id": tee.id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
@@ -94,4 +107,5 @@ def test_round_flow(client):
         "distance": None,
         "hcp": None,
         "strokes": {"u1": 5},
+        "handicap_strokes": {"u1": 0},
     }

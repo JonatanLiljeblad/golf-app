@@ -7,6 +7,7 @@ from sqlalchemy.pool import StaticPool
 from app.api.deps import get_db, get_current_user_id
 from app.db.base import Base
 from app.models.activity_event import ActivityEvent
+from app.models.course import CourseTee
 import app.models.player  # noqa: F401
 import app.models.course  # noqa: F401
 import app.models.round  # noqa: F401
@@ -40,6 +41,19 @@ def client():
     app.dependency_overrides.clear()
 
 
+def _create_tee(course_id, name: str = "Default"):
+    db_gen = app.dependency_overrides[get_db]()
+    db = next(db_gen)
+    try:
+        tee = CourseTee(course_id=course_id, tee_name=name)
+        db.add(tee)
+        db.commit()
+        db.refresh(tee)
+        return tee.id
+    finally:
+        db_gen.close()
+
+
 def test_pb_events_on_round_completion(client):
     """Test that PB events (pb_overall and pb_course) are emitted on round completion for non-guest participants."""
     # Create a course
@@ -52,9 +66,10 @@ def test_pb_events_on_round_completion(client):
     ).json()
     course_id = c["id"]
 
-    # Create a round
+    # Create a round (tee selection required)
+    tee_id = _create_tee(course_id)
     r = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee_id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
@@ -113,9 +128,10 @@ def test_pb_events_idempotent(client):
     ).json()
     course_id = c["id"]
 
-    # Create a round
+    # Create a round (tee selection required)
+    tee_id = _create_tee(course_id)
     r = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee_id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
@@ -176,10 +192,18 @@ def test_pb_events_not_for_guests(client):
     course_id = c["id"]
 
     # Create a round with a guest player
+    db = next(app.dependency_overrides[get_db]())
+    from app.models.course import CourseTee
+
+    tee = CourseTee(course_id=course_id, tee_name="Default")
+    db.add(tee)
+    db.commit()
+
     r = client.post(
         "/api/v1/rounds",
         json={
             "course_id": course_id,
+            "tee_id": tee.id,
             "guest_players": [{"name": "Guest Player", "handicap": 10.0}],
         },
         headers={"X-User-Id": "u1"},
@@ -245,8 +269,9 @@ def test_player_stats_endpoint(client):
     course_id = c["id"]
 
     # Create and complete a round with score 4 on each hole (score_to_par = 0)
+    tee_id = _create_tee(course_id)
     r = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee_id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
@@ -285,8 +310,9 @@ def test_player_stats_multiple_rounds(client):
     course_id = c["id"]
 
     # Create and complete first round with score 4 on each hole (score_to_par = 0)
+    tee1_id = _create_tee(course_id, name="Default1")
     r1 = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee1_id}, headers={"X-User-Id": "u1"}
     ).json()
 
     for hn in range(1, 19):
@@ -297,8 +323,9 @@ def test_player_stats_multiple_rounds(client):
         )
 
     # Create and complete second round with score 5 on each hole (score_to_par = 18)
+    tee2_id = _create_tee(course_id, name="Default2")
     r2 = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee2_id}, headers={"X-User-Id": "u1"}
     ).json()
 
     for hn in range(1, 19):
@@ -335,8 +362,9 @@ def test_players_me_includes_stats(client):
     course_id = c["id"]
 
     # Create and complete a round
+    tee_id = _create_tee(course_id)
     r = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee_id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
@@ -373,8 +401,9 @@ def test_nine_hole_course_stats_normalization(client):
     course_id = c["id"]
 
     # Create and complete a round with 5 strokes per hole (total_strokes=45)
+    tee_id = _create_tee(course_id)
     r = client.post(
-        "/api/v1/rounds", json={"course_id": course_id}, headers={"X-User-Id": "u1"}
+        "/api/v1/rounds", json={"course_id": course_id, "tee_id": tee_id}, headers={"X-User-Id": "u1"}
     )
     assert r.status_code == 201
     round_id = r.json()["id"]
