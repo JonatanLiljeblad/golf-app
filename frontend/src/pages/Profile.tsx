@@ -53,7 +53,7 @@ export default function Profile() {
       setUsername(data.username ?? "");
       setName(data.name ?? "");
       setHandicap(formatHandicapForInput(data.handicap));
-      setGender((data.gender as any) ?? "");
+      setGender(data.gender ?? "");
     } catch (e) {
       const err = e as ApiError;
       setApiError(`Failed to load profile (${err.status}).`);
@@ -197,7 +197,7 @@ export default function Profile() {
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Gender</span>
-              <select value={gender} onChange={(e) => setGender(e.target.value as any)}>
+              <select value={gender} onChange={(e) => setGender(e.target.value as "men" | "women" | "")}>
                 <option value="">—</option>
                 <option value="men">Men</option>
                 <option value="women">Women</option>

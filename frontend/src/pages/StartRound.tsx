@@ -531,7 +531,7 @@ export default function StartRound() {
                       onChange={(e) => setGuestHandicap(e.target.value)}
                       placeholder="Guest handicap (optional, e.g. +0.1)"
                     />
-                    <select value={guestGender} onChange={(e) => setGuestGender(e.target.value as any)}>
+                    <select value={guestGender} onChange={(e) => setGuestGender(e.target.value as "men" | "women" | "")}>
                       <option value="">Gender…</option>
                       <option value="men">Men</option>
                       <option value="women">Women</option>
