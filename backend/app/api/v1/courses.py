@@ -33,6 +33,7 @@ class TeeHoleDistanceIn(BaseModel):
 
 
 class TeeIn(BaseModel):
+    id: int | None = None
     tee_name: str = Field(min_length=1, max_length=64)
     course_rating: float | None = None
     slope_rating: int | None = None
@@ -47,6 +48,10 @@ class CourseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     holes: list[HoleIn]
     tees: list[TeeIn] = []
+
+
+class CourseUpdate(CourseCreate):
+    pass
 
     @field_validator("holes")
     @classmethod
@@ -88,9 +93,24 @@ class CourseCreate(BaseModel):
         return tees
 
 
-class TeeSummaryOut(BaseModel):
+class TeeHoleDistanceOut(BaseModel):
+    hole_number: int
+    distance: int
+
+    class Config:
+        from_attributes = True
+
+
+class TeeOut(BaseModel):
     id: int
     tee_name: str
+    course_rating: float | None = None
+    slope_rating: int | None = None
+    course_rating_men: float | None = None
+    slope_rating_men: int | None = None
+    course_rating_women: float | None = None
+    slope_rating_women: int | None = None
+    hole_distances: list[TeeHoleDistanceOut] = []
 
     class Config:
         from_attributes = True
@@ -101,7 +121,7 @@ class CourseOut(BaseModel):
     name: str
     owner_id: str
     holes: list[HoleOut]
-    tees: list[TeeSummaryOut] = []
+    tees: list[TeeOut] = []
 
     class Config:
         from_attributes = True
@@ -142,7 +162,11 @@ def create_course(
 
     stmt = (
         select(Course)
-        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
+        .options(
+            joinedload(Course.owner),
+            joinedload(Course.holes),
+            joinedload(Course.tees).joinedload(CourseTee.hole_distances),
+        )
         .where(Course.id == course.id)
     )
     return db.execute(stmt).scalars().unique().one()
@@ -155,7 +179,11 @@ def list_courses(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
+        .options(
+            joinedload(Course.owner),
+            joinedload(Course.holes),
+            joinedload(Course.tees).joinedload(CourseTee.hole_distances),
+        )
         .where(Course.archived_at.is_(None))
         .order_by(Course.id)
     )
@@ -170,13 +198,109 @@ def get_course(
 ):
     stmt = (
         select(Course)
-        .options(joinedload(Course.owner), joinedload(Course.holes), joinedload(Course.tees))
+        .options(
+            joinedload(Course.owner),
+            joinedload(Course.holes),
+            joinedload(Course.tees).joinedload(CourseTee.hole_distances),
+        )
         .where(Course.id == course_id, Course.archived_at.is_(None))
     )
     course = db.execute(stmt).scalars().unique().one_or_none()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
     return course
+
+
+@router.put("/courses/{course_id}", response_model=CourseOut)
+def update_course(
+    course_id: int,
+    payload: CourseUpdate,
+    db: Session = Depends(get_db),
+    user_id: str = Depends(get_current_user_id),
+):
+    owner = ensure_player(db, user_id)
+
+    course = db.execute(
+        select(Course)
+        .options(joinedload(Course.tees).joinedload(CourseTee.hole_distances), joinedload(Course.holes))
+        .where(Course.id == course_id, Course.archived_at.is_(None))
+    ).scalars().unique().one_or_none()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    if course.owner_player_id != owner.id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+
+    course.name = payload.name
+
+    # Replace holes (not referenced by FKs from rounds).
+    course.holes.clear()
+    db.flush()
+    course.holes = [
+        Hole(number=h.number, par=h.par, distance=h.distance, hcp=h.hcp) for h in payload.holes
+    ]
+
+    # Update tees in-place (tees are referenced by rounds.tee_id).
+    existing_by_id = {t.id: t for t in course.tees}
+    existing_by_name = {t.tee_name.strip().lower(): t for t in course.tees}
+    seen_ids: set[int] = set()
+
+    for t_in in payload.tees:
+        name = t_in.tee_name.strip()
+        tee = None
+        if t_in.id is not None and t_in.id in existing_by_id:
+            tee = existing_by_id[t_in.id]
+        else:
+            tee = existing_by_name.get(name.lower())
+
+        if tee is None:
+            tee = CourseTee(course_id=course.id)
+            course.tees.append(tee)
+
+        tee.tee_name = name
+        tee.course_rating = t_in.course_rating
+        tee.slope_rating = t_in.slope_rating
+        tee.course_rating_men = t_in.course_rating_men
+        tee.slope_rating_men = t_in.slope_rating_men
+        tee.course_rating_women = t_in.course_rating_women
+        tee.slope_rating_women = t_in.slope_rating_women
+        tee.hole_distances = [
+            TeeHoleDistance(hole_number=d.hole_number, distance=d.distance)
+            for d in sorted(t_in.hole_distances, key=lambda x: x.hole_number)
+        ]
+
+        if tee.id is not None:
+            seen_ids.add(tee.id)
+
+    # If a tee was removed from the payload, try to delete it; if it's in use by rounds, reject.
+    for tee in list(course.tees):
+        if tee.id is None:
+            continue
+        if tee.id in seen_ids:
+            continue
+        try:
+            db.delete(tee)
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409, detail="Cannot remove a tee that is used by rounds")
+
+    db.add(course)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Course update violates constraints")
+
+    stmt = (
+        select(Course)
+        .options(
+            joinedload(Course.owner),
+            joinedload(Course.holes),
+            joinedload(Course.tees).joinedload(CourseTee.hole_distances),
+        )
+        .where(Course.id == course_id)
+    )
+    return db.execute(stmt).scalars().unique().one()
 
 
 @router.delete("/courses/{course_id}")

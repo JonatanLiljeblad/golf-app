@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 
 import { useApi } from "../api/useApi";
@@ -7,6 +7,7 @@ import type { Course } from "../api/types";
 type ApiError = { status: number; body: unknown };
 
 type TeeDraft = {
+  id?: number | null;
   tee_name: string;
   course_rating_men: string;
   slope_rating_men: string;
@@ -26,6 +27,7 @@ function mkHoles(count: 9 | 18) {
 
 function mkTee(count: 9 | 18, tee_name = "White"): TeeDraft {
   return {
+    id: null,
     tee_name,
     course_rating_men: "",
     slope_rating_men: "",
@@ -51,7 +53,14 @@ export default function Courses() {
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createStep, setCreateStep] = useState<1 | 2>(1);
 
+  const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
+  const skipResetRef = useRef(false);
+
   useEffect(() => {
+    if (skipResetRef.current) {
+      skipResetRef.current = false;
+      return;
+    }
     setHoles(mkHoles(holesCount));
     setTees([mkTee(holesCount)]);
     setSelectedTeeIdx(0);
@@ -108,6 +117,25 @@ export default function Courses() {
     return true;
   }, [holesCount, step1Valid, tees]);
 
+  function mkPayload(trimmedName: string) {
+    return {
+      name: trimmedName,
+      holes: holes.map((h) => ({ number: h.number, par: h.par, hcp: h.hcp, distance: null })),
+      tees: tees.map((t) => ({
+        id: t.id ?? null,
+        tee_name: t.tee_name.trim(),
+        course_rating_men: Number(t.course_rating_men),
+        slope_rating_men: Number(t.slope_rating_men),
+        course_rating_women: Number(t.course_rating_women),
+        slope_rating_women: Number(t.slope_rating_women),
+        // legacy fields (backwards compatibility)
+        course_rating: Number(t.course_rating_men),
+        slope_rating: Number(t.slope_rating_men),
+        hole_distances: t.hole_distances.map((d, i) => ({ hole_number: i + 1, distance: d as number })),
+      })),
+    };
+  }
+
   async function createCourse() {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -115,25 +143,9 @@ export default function Courses() {
     setError(null);
     setLoading("Creating course…");
     try {
-      const payload = {
-        name: trimmed,
-        holes: holes.map((h) => ({ number: h.number, par: h.par, hcp: h.hcp, distance: null })),
-        tees: tees.map((t) => ({
-          tee_name: t.tee_name.trim(),
-          course_rating_men: Number(t.course_rating_men),
-          slope_rating_men: Number(t.slope_rating_men),
-          course_rating_women: Number(t.course_rating_women),
-          slope_rating_women: Number(t.slope_rating_women),
-          // legacy fields (backwards compatibility)
-          course_rating: Number(t.course_rating_men),
-          slope_rating: Number(t.slope_rating_men),
-          hole_distances: t.hole_distances.map((d, i) => ({ hole_number: i + 1, distance: d as number })),
-        })),
-      };
-
       const created = await request<Course>("/api/v1/courses", {
         method: "POST",
-        body: JSON.stringify(payload),
+        body: JSON.stringify(mkPayload(trimmed)),
       });
       setCourses((prev) => [...prev, created]);
       setName("");
@@ -141,12 +153,67 @@ export default function Courses() {
       setTees([mkTee(holesCount)]);
       setSelectedTeeIdx(0);
       setCreateStep(1);
+      setEditingCourseId(null);
       setCreateModalOpen(false);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to create course (${err.status}).`);
     } finally {
       setLoading(null);
+    }
+  }
+
+  async function updateCourse(courseId: number) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+
+    setError(null);
+    setLoading("Saving course…");
+    try {
+      const updated = await request<Course>(`/api/v1/courses/${courseId}`, {
+        method: "PUT",
+        body: JSON.stringify(mkPayload(trimmed)),
+      });
+      setCourses((prev) => prev.map((c) => (c.id === courseId ? updated : c)));
+      setEditingCourseId(null);
+      setCreateModalOpen(false);
+      setCreateStep(1);
+    } catch (e) {
+      const err = e as ApiError;
+      if (err.status === 403) setError("You can only edit courses you created.");
+      else setError(`Failed to save course (${err.status}).`);
+    } finally {
+      setLoading(null);
+    }
+  }
+
+  function courseToDraft(course: Course) {
+    setName(course.name);
+    const count = (course.holes.length === 18 ? 18 : 9) as 9 | 18;
+    skipResetRef.current = true;
+    setHolesCount(count);
+    setHoles(course.holes.map((h) => ({ number: h.number, par: h.par, distance: null as number | null, hcp: h.hcp }))); // distance unused in UI
+
+    const teesFromApi = course.tees ?? [];
+    if (teesFromApi.length) {
+      setTees(
+        teesFromApi.map((t) => {
+          const byHole = new Map(t.hole_distances.map((d) => [d.hole_number, d.distance] as const));
+          return {
+            id: t.id,
+            tee_name: t.tee_name,
+            course_rating_men: String(t.course_rating_men ?? t.course_rating ?? ""),
+            slope_rating_men: String(t.slope_rating_men ?? t.slope_rating ?? ""),
+            course_rating_women: String(t.course_rating_women ?? ""),
+            slope_rating_women: String(t.slope_rating_women ?? ""),
+            hole_distances: Array.from({ length: count }, (_, i) => byHole.get(i + 1) ?? null),
+          };
+        })
+      );
+      setSelectedTeeIdx(0);
+    } else {
+      setTees([mkTee(count)]);
+      setSelectedTeeIdx(0);
     }
   }
 
@@ -192,6 +259,9 @@ export default function Courses() {
             className="auth-btn primary"
             onClick={() => {
               setError(null);
+              setEditingCourseId(null);
+              setName("");
+              setHolesCount(9);
               setCreateStep(1);
               setCreateModalOpen(true);
             }}
@@ -220,11 +290,12 @@ export default function Courses() {
           onClick={() => {
             setCreateModalOpen(false);
             setCreateStep(1);
+            setEditingCourseId(null);
           }}
         >
           <div className="auth-card modal-card modal-card--wide" onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
-              <div style={{ fontWeight: 900 }}>Create course · Step {createStep} / 2</div>
+              <div style={{ fontWeight: 900 }}>{editingCourseId ? "Edit course" : "Create course"} · Step {createStep} / 2</div>
               <button
                 className="auth-btn secondary"
                 style={{ padding: ".45rem .7rem" }}
@@ -537,8 +608,12 @@ export default function Courses() {
                     <button className="auth-btn secondary" onClick={() => setCreateStep(1)}>
                       Back
                     </button>
-                    <button className="auth-btn primary" disabled={!canCreate || !!loading} onClick={() => void createCourse()}>
-                      Create
+                    <button
+                      className="auth-btn primary"
+                      disabled={!canCreate || !!loading}
+                      onClick={() => (editingCourseId ? void updateCourse(editingCourseId) : void createCourse())}
+                    >
+                      {editingCourseId ? "Save" : "Create"}
                     </button>
                   </div>
                 </>
@@ -562,9 +637,24 @@ export default function Courses() {
                   <div className="auth-mono">Holes: {c.holes.length} · Par {c.holes.reduce((acc, h) => acc + h.par, 0)}</div>
                 </div>
                 {user?.sub === c.owner_id ? (
-                  <button className="auth-btn secondary" disabled={!!loading} onClick={() => void deleteCourse(c.id)}>
-                    Delete
-                  </button>
+                  <div className="auth-row" style={{ gap: ".5rem" }}>
+                    <button
+                      className="auth-btn secondary"
+                      disabled={!!loading}
+                      onClick={() => {
+                        setError(null);
+                        setEditingCourseId(c.id);
+                        courseToDraft(c);
+                        setCreateStep(1);
+                        setCreateModalOpen(true);
+                      }}
+                    >
+                      Edit
+                    </button>
+                    <button className="auth-btn secondary" disabled={!!loading} onClick={() => void deleteCourse(c.id)}>
+                      Delete
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </div>

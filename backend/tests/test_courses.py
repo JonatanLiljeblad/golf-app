@@ -39,6 +39,20 @@ def test_create_and_list_courses(client):
     payload = {
         "name": "My Course",
         "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+        "tees": [
+            {
+                "tee_name": "White",
+                "course_rating_men": 72.0,
+                "slope_rating_men": 113,
+                "course_rating_women": 72.0,
+                "slope_rating_women": 113,
+                "course_rating": 72.0,
+                "slope_rating": 113,
+                "hole_distances": [
+                    {"hole_number": i, "distance": 350} for i in range(1, 10)
+                ],
+            }
+        ],
     }
 
     resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
@@ -77,6 +91,20 @@ def test_cannot_archive_course_with_active_rounds(client):
     payload = {
         "name": "Shared Course",
         "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+        "tees": [
+            {
+                "tee_name": "Default",
+                "course_rating_men": 72.0,
+                "slope_rating_men": 113,
+                "course_rating_women": 72.0,
+                "slope_rating_women": 113,
+                "course_rating": 72.0,
+                "slope_rating": 113,
+                "hole_distances": [
+                    {"hole_number": i, "distance": 350} for i in range(1, 10)
+                ],
+            }
+        ],
     }
 
     resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
@@ -84,21 +112,11 @@ def test_cannot_archive_course_with_active_rounds(client):
     course = resp.json()
 
     # Another user starts a round on the same course.
-    db_gen = app.dependency_overrides[get_db]()
-    db = next(db_gen)
-    from app.models.course import CourseTee
-
-    try:
-        tee = CourseTee(course_id=course["id"], tee_name="Default")
-        db.add(tee)
-        db.commit()
-        db.refresh(tee)
-    finally:
-        db_gen.close()
+    tee_id = course["tees"][0]["id"]
 
     r = client.post(
         "/api/v1/rounds",
-        json={"course_id": course["id"], "tee_id": tee.id},
+        json={"course_id": course["id"], "tee_id": tee_id},
         headers={"X-User-Id": "u2"},
     )
     assert r.status_code == 201

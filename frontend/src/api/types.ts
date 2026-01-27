@@ -6,6 +6,23 @@ export type Hole = {
   hcp: number | null;
 };
 
+export type TeeHoleDistance = {
+  hole_number: number;
+  distance: number;
+};
+
+export type Tee = {
+  id: number;
+  tee_name: string;
+  course_rating: number | null;
+  slope_rating: number | null;
+  course_rating_men: number | null;
+  slope_rating_men: number | null;
+  course_rating_women: number | null;
+  slope_rating_women: number | null;
+  hole_distances: TeeHoleDistance[];
+};
+
 export type TeeSummary = {
   id: number;
   tee_name: string;
@@ -16,7 +33,7 @@ export type Course = {
   name: string;
   owner_id: string;
   holes: Hole[];
-  tees?: TeeSummary[];
+  tees?: Tee[];
 };
 
 export type RoundHole = {
