@@ -330,10 +330,17 @@ def get_tournament(
     hole_par = {h.number: h.par for h in (t.course.holes or [])}
 
     leaderboard: list[LeaderboardEntryOut] = []
+
+    # Pre-index scores by (round_id, player_id) to avoid O(players * scores) filtering.
+    scores_by_round_player: dict[tuple[int, int], list[HoleScore]] = {}
+    for r in rounds:
+        for s in r.scores:
+            scores_by_round_player.setdefault((r.id, s.player_id), []).append(s)
+
     for r in rounds:
         for part in r.participants:
             pid = part.player.external_id
-            scores = [s for s in r.scores if s.player.external_id == pid]
+            scores = scores_by_round_player.get((r.id, part.player_id), [])
             holes_done = {s.hole_number for s in scores}
             strokes = sum(s.strokes for s in scores)
             par = sum(hole_par.get(hn, 0) for hn in holes_done)

@@ -48,14 +48,19 @@ export default function MyRounds() {
       <div className="auth-card content-narrow">
         <h1 className="auth-title">My Rounds</h1>
         <p className="auth-subtitle">Log in to view your rounds.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
     );
   }
 
-  const scoped = rounds.filter((r) => (scope === "active" ? !r.completed_at : !!r.completed_at));
+  const scoped = rounds.filter((r) =>
+    scope === "active" ? !r.completed_at : !!r.completed_at,
+  );
   const tourney = scoped.filter((r) => r.tournament_id != null);
   const regular = scoped.filter((r) => r.tournament_id == null);
 
@@ -65,13 +70,17 @@ export default function MyRounds() {
         <h1 style={{ margin: 0 }}>My Rounds</h1>
         <div className="auth-row">
           <button
-            className={scope === "active" ? "auth-btn primary" : "auth-btn secondary"}
+            className={
+              scope === "active" ? "auth-btn primary" : "auth-btn secondary"
+            }
             onClick={() => setScope("active")}
           >
             Active
           </button>
           <button
-            className={scope === "history" ? "auth-btn primary" : "auth-btn secondary"}
+            className={
+              scope === "history" ? "auth-btn primary" : "auth-btn secondary"
+            }
             onClick={() => setScope("history")}
           >
             History
@@ -94,7 +103,11 @@ export default function MyRounds() {
         <div className="auth-card">
           <div className="auth-mono">No rounds yet.</div>
           <div style={{ marginTop: ".75rem" }}>
-            <Link className="auth-btn primary" to="/round/start" style={{ display: "inline-block" }}>
+            <Link
+              className="auth-btn primary"
+              to="/round/start"
+              style={{ display: "inline-block" }}
+            >
               Start a round
             </Link>
           </div>
@@ -102,23 +115,50 @@ export default function MyRounds() {
       ) : (
         <div style={{ display: "grid", gap: ".75rem" }}>
           {!!tourney.length && (
-            <div className="auth-card" style={{ margin: 0, maxWidth: "none", padding: "1rem" }}>
-              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Tournament rounds</div>
+            <div
+              className="auth-card"
+              style={{ margin: 0, maxWidth: "none", padding: "1rem" }}
+            >
+              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>
+                Tournament rounds
+              </div>
               <div style={{ display: "grid", gap: ".75rem" }}>
                 {tourney.map((r) => (
                   <div key={r.id} className="card-inset">
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "1rem",
+                      }}
+                    >
                       <div>
-                        <div style={{ fontWeight: 800 }}>{r.course_name} · Round #{r.id}</div>
-                        <div className="auth-mono">Started: {fmtDate(r.started_at)}</div>
-                        <div className="auth-mono">{r.completed_at ? `Completed: ${fmtDate(r.completed_at)}` : "In progress"}</div>
+                        <div style={{ fontWeight: 800 }}>
+                          {r.course_name} · Round #{r.id}
+                        </div>
+                        <div className="auth-mono">
+                          Started: {fmtDate(r.started_at)}
+                        </div>
+                        <div className="auth-mono">
+                          {r.completed_at
+                            ? `Completed: ${fmtDate(r.completed_at)}`
+                            : "In progress"}
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div className="auth-mono">Par {r.total_par}</div>
-                        <div className="auth-mono">Strokes: {r.total_strokes ?? "—"}</div>
-                        <div className="auth-mono">Players: {r.players_count}</div>
+                        <div className="auth-mono">
+                          Strokes: {r.total_strokes ?? "—"}
+                        </div>
+                        <div className="auth-mono">
+                          Players: {r.players_count}
+                        </div>
                         <div style={{ marginTop: ".5rem" }}>
-                          <Link className="auth-btn secondary" to={`/rounds/${r.id}`} style={{ display: "inline-block" }}>
+                          <Link
+                            className="auth-btn secondary"
+                            to={`/rounds/${r.id}`}
+                            style={{ display: "inline-block" }}
+                          >
                             {r.completed_at ? "View scorecard" : "Resume"}
                           </Link>
                         </div>
@@ -131,23 +171,50 @@ export default function MyRounds() {
           )}
 
           {!!regular.length && (
-            <div className="auth-card" style={{ margin: 0, maxWidth: "none", padding: "1rem" }}>
-              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Regular rounds</div>
+            <div
+              className="auth-card"
+              style={{ margin: 0, maxWidth: "none", padding: "1rem" }}
+            >
+              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>
+                Regular rounds
+              </div>
               <div style={{ display: "grid", gap: ".75rem" }}>
                 {regular.map((r) => (
                   <div key={r.id} className="card-inset">
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: "1rem",
+                      }}
+                    >
                       <div>
-                        <div style={{ fontWeight: 800 }}>{r.course_name} · Round #{r.id}</div>
-                        <div className="auth-mono">Started: {fmtDate(r.started_at)}</div>
-                        <div className="auth-mono">{r.completed_at ? `Completed: ${fmtDate(r.completed_at)}` : "In progress"}</div>
+                        <div style={{ fontWeight: 800 }}>
+                          {r.course_name} · Round #{r.id}
+                        </div>
+                        <div className="auth-mono">
+                          Started: {fmtDate(r.started_at)}
+                        </div>
+                        <div className="auth-mono">
+                          {r.completed_at
+                            ? `Completed: ${fmtDate(r.completed_at)}`
+                            : "In progress"}
+                        </div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div className="auth-mono">Par {r.total_par}</div>
-                        <div className="auth-mono">Strokes: {r.total_strokes ?? "—"}</div>
-                        <div className="auth-mono">Players: {r.players_count}</div>
+                        <div className="auth-mono">
+                          Strokes: {r.total_strokes ?? "—"}
+                        </div>
+                        <div className="auth-mono">
+                          Players: {r.players_count}
+                        </div>
                         <div style={{ marginTop: ".5rem" }}>
-                          <Link className="auth-btn secondary" to={`/rounds/${r.id}`} style={{ display: "inline-block" }}>
+                          <Link
+                            className="auth-btn secondary"
+                            to={`/rounds/${r.id}`}
+                            style={{ display: "inline-block" }}
+                          >
                             {r.completed_at ? "View scorecard" : "Resume"}
                           </Link>
                         </div>

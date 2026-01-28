@@ -28,7 +28,9 @@ export default function ViewPlayer() {
       try {
         const [data, s] = await Promise.all([
           request<Player>(`/api/v1/players/${encodeURIComponent(externalId)}`),
-          request<PlayerStats>(`/api/v1/players/${encodeURIComponent(externalId)}/stats`),
+          request<PlayerStats>(
+            `/api/v1/players/${encodeURIComponent(externalId)}/stats`,
+          ),
         ]);
         setPlayer(data);
         setStats(s);
@@ -104,7 +106,9 @@ export default function ViewPlayer() {
               <div>
                 <div style={{ fontWeight: 700 }}>Avg strokes</div>
                 <div className="auth-mono">
-                  {stats?.avg_strokes == null ? "—" : stats.avg_strokes.toFixed(1)}
+                  {stats?.avg_strokes == null
+                    ? "—"
+                    : stats.avg_strokes.toFixed(1)}
                 </div>
               </div>
             </div>

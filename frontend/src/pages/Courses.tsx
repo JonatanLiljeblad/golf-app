@@ -66,7 +66,10 @@ export default function Courses() {
     setSelectedTeeIdx(0);
   }, [holesCount]);
 
-  const totalPar = useMemo(() => holes.reduce((acc, h) => acc + h.par, 0), [holes]);
+  const totalPar = useMemo(
+    () => holes.reduce((acc, h) => acc + h.par, 0),
+    [holes],
+  );
 
   async function load() {
     setError(null);
@@ -99,7 +102,8 @@ export default function Courses() {
 
     const names = tees.map((t) => t.tee_name.trim());
     if (names.some((n) => !n)) return false;
-    if (new Set(names.map((n) => n.toLowerCase())).size !== names.length) return false;
+    if (new Set(names.map((n) => n.toLowerCase())).size !== names.length)
+      return false;
 
     for (const t of tees) {
       const crMen = Number(t.course_rating_men);
@@ -111,7 +115,10 @@ export default function Courses() {
       if (!Number.isFinite(crWomen)) return false;
       if (!Number.isInteger(srWomen)) return false;
       if (t.hole_distances.length !== holesCount) return false;
-      if (t.hole_distances.some((d) => d == null || !Number.isFinite(d) || d <= 0)) return false;
+      if (
+        t.hole_distances.some((d) => d == null || !Number.isFinite(d) || d <= 0)
+      )
+        return false;
     }
 
     return true;
@@ -120,7 +127,12 @@ export default function Courses() {
   function mkPayload(trimmedName: string) {
     return {
       name: trimmedName,
-      holes: holes.map((h) => ({ number: h.number, par: h.par, hcp: h.hcp, distance: null })),
+      holes: holes.map((h) => ({
+        number: h.number,
+        par: h.par,
+        hcp: h.hcp,
+        distance: null,
+      })),
       tees: tees.map((t) => ({
         id: t.id ?? null,
         tee_name: t.tee_name.trim(),
@@ -131,7 +143,10 @@ export default function Courses() {
         // legacy fields (backwards compatibility)
         course_rating: Number(t.course_rating_men),
         slope_rating: Number(t.slope_rating_men),
-        hole_distances: t.hole_distances.map((d, i) => ({ hole_number: i + 1, distance: d as number })),
+        hole_distances: t.hole_distances.map((d, i) => ({
+          hole_number: i + 1,
+          distance: d as number,
+        })),
       })),
     };
   }
@@ -180,7 +195,8 @@ export default function Courses() {
       setCreateStep(1);
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 403) setError("You can only edit courses you created.");
+      if (err.status === 403)
+        setError("You can only edit courses you created.");
       else setError(`Failed to save course (${err.status}).`);
     } finally {
       setLoading(null);
@@ -192,23 +208,39 @@ export default function Courses() {
     const count = (course.holes.length === 18 ? 18 : 9) as 9 | 18;
     skipResetRef.current = true;
     setHolesCount(count);
-    setHoles(course.holes.map((h) => ({ number: h.number, par: h.par, distance: null as number | null, hcp: h.hcp }))); // distance unused in UI
+    setHoles(
+      course.holes.map((h) => ({
+        number: h.number,
+        par: h.par,
+        distance: null as number | null,
+        hcp: h.hcp,
+      })),
+    ); // distance unused in UI
 
     const teesFromApi = course.tees ?? [];
     if (teesFromApi.length) {
       setTees(
         teesFromApi.map((t) => {
-          const byHole = new Map(t.hole_distances.map((d) => [d.hole_number, d.distance] as const));
+          const byHole = new Map(
+            t.hole_distances.map((d) => [d.hole_number, d.distance] as const),
+          );
           return {
             id: t.id,
             tee_name: t.tee_name,
-            course_rating_men: String(t.course_rating_men ?? t.course_rating ?? ""),
-            slope_rating_men: String(t.slope_rating_men ?? t.slope_rating ?? ""),
+            course_rating_men: String(
+              t.course_rating_men ?? t.course_rating ?? "",
+            ),
+            slope_rating_men: String(
+              t.slope_rating_men ?? t.slope_rating ?? "",
+            ),
             course_rating_women: String(t.course_rating_women ?? ""),
             slope_rating_women: String(t.slope_rating_women ?? ""),
-            hole_distances: Array.from({ length: count }, (_, i) => byHole.get(i + 1) ?? null),
+            hole_distances: Array.from(
+              { length: count },
+              (_, i) => byHole.get(i + 1) ?? null,
+            ),
           };
-        })
+        }),
       );
       setSelectedTeeIdx(0);
     } else {
@@ -225,8 +257,10 @@ export default function Courses() {
       setCourses((prev) => prev.filter((c) => c.id !== courseId));
     } catch (e) {
       const err = e as ApiError;
-      if (err.status === 403) setError("You can only delete courses you created.");
-      else if (err.status === 409) setError("Cannot delete: course has active rounds.");
+      if (err.status === 403)
+        setError("You can only delete courses you created.");
+      else if (err.status === 409)
+        setError("Cannot delete: course has active rounds.");
       else setError(`Failed to delete course (${err.status}).`);
     } finally {
       setLoading(null);
@@ -242,8 +276,13 @@ export default function Courses() {
     return (
       <div className="auth-card content-narrow">
         <h1 className="auth-title">Courses</h1>
-        <p className="auth-subtitle">Log in to create and manage your courses.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <p className="auth-subtitle">
+          Log in to create and manage your courses.
+        </p>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
@@ -293,9 +332,22 @@ export default function Courses() {
             setEditingCourseId(null);
           }}
         >
-          <div className="auth-card modal-card modal-card--wide" onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
-              <div style={{ fontWeight: 900 }}>{editingCourseId ? "Edit course" : "Create course"} · Step {createStep} / 2</div>
+          <div
+            className="auth-card modal-card modal-card--wide"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "1rem",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ fontWeight: 900 }}>
+                {editingCourseId ? "Edit course" : "Create course"} · Step{" "}
+                {createStep} / 2
+              </div>
               <button
                 className="auth-btn secondary"
                 style={{ padding: ".45rem .7rem" }}
@@ -313,13 +365,31 @@ export default function Courses() {
                 <>
                   <label style={{ display: "grid", gap: ".25rem" }}>
                     <span style={{ fontWeight: 700 }}>Name</span>
-                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. My Home Course" />
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="e.g. My Home Course"
+                    />
                   </label>
 
-                  <div className="auth-row" style={{ justifyContent: "space-between", alignItems: "flex-end", gap: ".75rem" }}>
-                    <label style={{ display: "grid", gap: ".25rem", minWidth: 140 }}>
+                  <div
+                    className="auth-row"
+                    style={{
+                      justifyContent: "space-between",
+                      alignItems: "flex-end",
+                      gap: ".75rem",
+                    }}
+                  >
+                    <label
+                      style={{ display: "grid", gap: ".25rem", minWidth: 140 }}
+                    >
                       <span style={{ fontWeight: 700 }}>Holes</span>
-                      <select value={holesCount} onChange={(e) => setHolesCount(Number(e.target.value) as 9 | 18)}>
+                      <select
+                        value={holesCount}
+                        onChange={(e) =>
+                          setHolesCount(Number(e.target.value) as 9 | 18)
+                        }
+                      >
                         <option value={9}>9</option>
                         <option value={18}>18</option>
                       </select>
@@ -333,7 +403,10 @@ export default function Courses() {
                         <div
                           key={h.number}
                           className="course-hole"
-                          style={{ gridTemplateColumns: "38px repeat(2, minmax(0, 1fr))" }}
+                          style={{
+                            gridTemplateColumns:
+                              "38px repeat(2, minmax(0, 1fr))",
+                          }}
                         >
                           <div className="course-hole__num">{h.number}</div>
 
@@ -375,10 +448,19 @@ export default function Courses() {
                               aria-label={`Hole ${h.number} handicap`}
                             >
                               <option value="">—</option>
-                              {Array.from({ length: holesCount }, (_, i) => i + 1).map((n) => {
-                                const usedElsewhere = holes.some((x, j) => j !== idx && x.hcp === n);
+                              {Array.from(
+                                { length: holesCount },
+                                (_, i) => i + 1,
+                              ).map((n) => {
+                                const usedElsewhere = holes.some(
+                                  (x, j) => j !== idx && x.hcp === n,
+                                );
                                 return (
-                                  <option key={n} value={n} disabled={usedElsewhere}>
+                                  <option
+                                    key={n}
+                                    value={n}
+                                    disabled={usedElsewhere}
+                                  >
                                     {n}
                                   </option>
                                 );
@@ -390,7 +472,13 @@ export default function Courses() {
                     </div>
                   </div>
 
-                  <div className="auth-row" style={{ justifyContent: "space-between", marginTop: ".75rem" }}>
+                  <div
+                    className="auth-row"
+                    style={{
+                      justifyContent: "space-between",
+                      marginTop: ".75rem",
+                    }}
+                  >
                     <button
                       className="auth-btn secondary"
                       onClick={() => {
@@ -400,7 +488,11 @@ export default function Courses() {
                     >
                       Cancel
                     </button>
-                    <button className="auth-btn primary" disabled={!step1Valid} onClick={() => setCreateStep(2)}>
+                    <button
+                      className="auth-btn primary"
+                      disabled={!step1Valid}
+                      onClick={() => setCreateStep(2)}
+                    >
                       Next
                     </button>
                   </div>
@@ -412,14 +504,21 @@ export default function Courses() {
                   <div style={{ display: "grid", gap: ".5rem" }}>
                     <div
                       className="auth-row"
-                      style={{ justifyContent: "space-between", alignItems: "center", gap: ".75rem" }}
+                      style={{
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        gap: ".75rem",
+                      }}
                     >
                       <div style={{ fontWeight: 800 }}>Tees</div>
                       <button
                         className="auth-btn secondary"
                         style={{ padding: ".45rem .7rem" }}
                         onClick={() => {
-                          setTees((prev) => [...prev, mkTee(holesCount, `Tee ${prev.length + 1}`)]);
+                          setTees((prev) => [
+                            ...prev,
+                            mkTee(holesCount, `Tee ${prev.length + 1}`),
+                          ]);
                           setSelectedTeeIdx(tees.length);
                         }}
                         type="button"
@@ -428,7 +527,10 @@ export default function Courses() {
                       </button>
                     </div>
 
-                    <div className="auth-row" style={{ gap: ".5rem", flexWrap: "wrap" }}>
+                    <div
+                      className="auth-row"
+                      style={{ gap: ".5rem", flexWrap: "wrap" }}
+                    >
                       {tees.map((t, idx) => (
                         <button
                           key={`${t.tee_name}-${idx}`}
@@ -452,7 +554,10 @@ export default function Courses() {
                               const v = e.target.value;
                               setTees((prev) => {
                                 const next = [...prev];
-                                next[selectedTeeIdx] = { ...next[selectedTeeIdx], tee_name: v };
+                                next[selectedTeeIdx] = {
+                                  ...next[selectedTeeIdx],
+                                  tee_name: v,
+                                };
                                 return next;
                               });
                             }}
@@ -464,11 +569,22 @@ export default function Courses() {
                           style={{
                             display: "grid",
                             gap: ".5rem",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+                            gridTemplateColumns:
+                              "repeat(auto-fit, minmax(180px, 1fr))",
                           }}
                         >
-                          <div className="card-inset" style={{ padding: ".75rem" }}>
-                            <div style={{ fontWeight: 800, marginBottom: ".35rem" }}>Men</div>
+                          <div
+                            className="card-inset"
+                            style={{ padding: ".75rem" }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                marginBottom: ".35rem",
+                              }}
+                            >
+                              Men
+                            </div>
                             <div style={{ display: "grid", gap: ".5rem" }}>
                               <label style={{ display: "grid", gap: ".25rem" }}>
                                 <span className="auth-mono">Course rating</span>
@@ -481,7 +597,10 @@ export default function Courses() {
                                     const v = e.target.value;
                                     setTees((prev) => {
                                       const next = [...prev];
-                                      next[selectedTeeIdx] = { ...next[selectedTeeIdx], course_rating_men: v };
+                                      next[selectedTeeIdx] = {
+                                        ...next[selectedTeeIdx],
+                                        course_rating_men: v,
+                                      };
                                       return next;
                                     });
                                   }}
@@ -500,7 +619,10 @@ export default function Courses() {
                                     const v = e.target.value;
                                     setTees((prev) => {
                                       const next = [...prev];
-                                      next[selectedTeeIdx] = { ...next[selectedTeeIdx], slope_rating_men: v };
+                                      next[selectedTeeIdx] = {
+                                        ...next[selectedTeeIdx],
+                                        slope_rating_men: v,
+                                      };
                                       return next;
                                     });
                                   }}
@@ -510,8 +632,18 @@ export default function Courses() {
                             </div>
                           </div>
 
-                          <div className="card-inset" style={{ padding: ".75rem" }}>
-                            <div style={{ fontWeight: 800, marginBottom: ".35rem" }}>Women</div>
+                          <div
+                            className="card-inset"
+                            style={{ padding: ".75rem" }}
+                          >
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                marginBottom: ".35rem",
+                              }}
+                            >
+                              Women
+                            </div>
                             <div style={{ display: "grid", gap: ".5rem" }}>
                               <label style={{ display: "grid", gap: ".25rem" }}>
                                 <span className="auth-mono">Course rating</span>
@@ -519,12 +651,17 @@ export default function Courses() {
                                   type="number"
                                   inputMode="decimal"
                                   step="0.1"
-                                  value={tees[selectedTeeIdx].course_rating_women}
+                                  value={
+                                    tees[selectedTeeIdx].course_rating_women
+                                  }
                                   onChange={(e) => {
                                     const v = e.target.value;
                                     setTees((prev) => {
                                       const next = [...prev];
-                                      next[selectedTeeIdx] = { ...next[selectedTeeIdx], course_rating_women: v };
+                                      next[selectedTeeIdx] = {
+                                        ...next[selectedTeeIdx],
+                                        course_rating_women: v,
+                                      };
                                       return next;
                                     });
                                   }}
@@ -538,12 +675,17 @@ export default function Courses() {
                                   type="number"
                                   inputMode="numeric"
                                   step="1"
-                                  value={tees[selectedTeeIdx].slope_rating_women}
+                                  value={
+                                    tees[selectedTeeIdx].slope_rating_women
+                                  }
                                   onChange={(e) => {
                                     const v = e.target.value;
                                     setTees((prev) => {
                                       const next = [...prev];
-                                      next[selectedTeeIdx] = { ...next[selectedTeeIdx], slope_rating_women: v };
+                                      next[selectedTeeIdx] = {
+                                        ...next[selectedTeeIdx],
+                                        slope_rating_women: v,
+                                      };
                                       return next;
                                     });
                                   }}
@@ -557,10 +699,17 @@ export default function Courses() {
                         {tees.length > 1 && (
                           <button
                             className="auth-btn secondary"
-                            style={{ padding: ".45rem .7rem", justifySelf: "start" }}
+                            style={{
+                              padding: ".45rem .7rem",
+                              justifySelf: "start",
+                            }}
                             onClick={() => {
-                              setTees((prev) => prev.filter((_, i) => i !== selectedTeeIdx));
-                              setSelectedTeeIdx((i) => Math.max(0, Math.min(i, tees.length - 2)));
+                              setTees((prev) =>
+                                prev.filter((_, i) => i !== selectedTeeIdx),
+                              );
+                              setSelectedTeeIdx((i) =>
+                                Math.max(0, Math.min(i, tees.length - 2)),
+                              );
                             }}
                             type="button"
                           >
@@ -570,48 +719,76 @@ export default function Courses() {
 
                         <div className="course-holes-scroll">
                           <div className="course-holes">
-                            {tees[selectedTeeIdx].hole_distances.map((d, holeIdx) => (
-                              <div key={holeIdx} className="tee-hole">
-                                <div className="course-hole__num">{holeIdx + 1}</div>
-                                <label style={{ display: "grid", gap: ".25rem" }}>
-                                  <span className="auth-mono">Distance</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={2000}
-                                    value={d ?? ""}
-                                    onChange={(e) => {
-                                      const raw = e.target.value;
-                                      const v = raw === "" ? null : Number(raw);
-                                      setTees((prev) => {
-                                        const next = [...prev];
-                                        const tee = next[selectedTeeIdx];
-                                        const hd = [...tee.hole_distances];
-                                        hd[holeIdx] = v != null && Number.isFinite(v) && v > 0 ? v : null;
-                                        next[selectedTeeIdx] = { ...tee, hole_distances: hd };
-                                        return next;
-                                      });
-                                    }}
-                                    placeholder="yd"
-                                    aria-label={`Tee ${tees[selectedTeeIdx].tee_name} hole ${holeIdx + 1} distance`}
-                                  />
-                                </label>
-                              </div>
-                            ))}
+                            {tees[selectedTeeIdx].hole_distances.map(
+                              (d, holeIdx) => (
+                                <div key={holeIdx} className="tee-hole">
+                                  <div className="course-hole__num">
+                                    {holeIdx + 1}
+                                  </div>
+                                  <label
+                                    style={{ display: "grid", gap: ".25rem" }}
+                                  >
+                                    <span className="auth-mono">Distance</span>
+                                    <input
+                                      type="number"
+                                      min={1}
+                                      max={2000}
+                                      value={d ?? ""}
+                                      onChange={(e) => {
+                                        const raw = e.target.value;
+                                        const v =
+                                          raw === "" ? null : Number(raw);
+                                        setTees((prev) => {
+                                          const next = [...prev];
+                                          const tee = next[selectedTeeIdx];
+                                          const hd = [...tee.hole_distances];
+                                          hd[holeIdx] =
+                                            v != null &&
+                                            Number.isFinite(v) &&
+                                            v > 0
+                                              ? v
+                                              : null;
+                                          next[selectedTeeIdx] = {
+                                            ...tee,
+                                            hole_distances: hd,
+                                          };
+                                          return next;
+                                        });
+                                      }}
+                                      placeholder="yd"
+                                      aria-label={`Tee ${tees[selectedTeeIdx].tee_name} hole ${holeIdx + 1} distance`}
+                                    />
+                                  </label>
+                                </div>
+                              ),
+                            )}
                           </div>
                         </div>
                       </div>
                     )}
                   </div>
 
-                  <div className="auth-row" style={{ justifyContent: "space-between", marginTop: ".75rem" }}>
-                    <button className="auth-btn secondary" onClick={() => setCreateStep(1)}>
+                  <div
+                    className="auth-row"
+                    style={{
+                      justifyContent: "space-between",
+                      marginTop: ".75rem",
+                    }}
+                  >
+                    <button
+                      className="auth-btn secondary"
+                      onClick={() => setCreateStep(1)}
+                    >
                       Back
                     </button>
                     <button
                       className="auth-btn primary"
                       disabled={!canCreate || !!loading}
-                      onClick={() => (editingCourseId ? void updateCourse(editingCourseId) : void createCourse())}
+                      onClick={() =>
+                        editingCourseId
+                          ? void updateCourse(editingCourseId)
+                          : void createCourse()
+                      }
                     >
                       {editingCourseId ? "Save" : "Create"}
                     </button>
@@ -630,11 +807,24 @@ export default function Courses() {
       ) : (
         <div style={{ display: "grid", gap: ".75rem" }}>
           {courses.map((c) => (
-            <div key={c.id} className="auth-card" style={{ margin: 0, maxWidth: "none", padding: "1rem" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+            <div
+              key={c.id}
+              className="auth-card"
+              style={{ margin: 0, maxWidth: "none", padding: "1rem" }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  gap: "1rem",
+                }}
+              >
                 <div>
                   <div style={{ fontWeight: 800 }}>{c.name}</div>
-                  <div className="auth-mono">Holes: {c.holes.length} · Par {c.holes.reduce((acc, h) => acc + h.par, 0)}</div>
+                  <div className="auth-mono">
+                    Holes: {c.holes.length} · Par{" "}
+                    {c.holes.reduce((acc, h) => acc + h.par, 0)}
+                  </div>
                 </div>
                 {user?.sub === c.owner_id ? (
                   <div className="auth-row" style={{ gap: ".5rem" }}>
@@ -651,7 +841,11 @@ export default function Courses() {
                     >
                       Edit
                     </button>
-                    <button className="auth-btn secondary" disabled={!!loading} onClick={() => void deleteCourse(c.id)}>
+                    <button
+                      className="auth-btn secondary"
+                      disabled={!!loading}
+                      onClick={() => void deleteCourse(c.id)}
+                    >
                       Delete
                     </button>
                   </div>

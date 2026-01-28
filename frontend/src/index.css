@@ -1,14 +1,21 @@
 /* Minimal styling for Auth UI */
 :root {
   color-scheme: dark;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  font-family:
+    system-ui,
+    -apple-system,
+    Segoe UI,
+    Roboto,
+    Helvetica,
+    Arial,
+    sans-serif;
 }
 
 body {
   margin: 0;
-  background: radial-gradient(1200px 800px at 20% 0%, #1c2a4a, transparent),
-    radial-gradient(900px 600px at 80% 20%, #0f3d2a, transparent),
-    #0b0f19;
+  background:
+    radial-gradient(1200px 800px at 20% 0%, #1c2a4a, transparent),
+    radial-gradient(900px 600px at 80% 20%, #0f3d2a, transparent), #0b0f19;
   color: #e6edf3;
 }
 
@@ -44,7 +51,9 @@ a {
   padding: 0.45rem 0.65rem;
   border-radius: 10px;
   color: rgba(230, 237, 243, 0.82);
-  transition: background 120ms ease, color 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .top-nav__links a:hover {
@@ -69,7 +78,10 @@ textarea {
   background: rgba(255, 255, 255, 0.04);
   color: #e6edf3;
   font: inherit;
-  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    background 120ms ease;
 }
 
 /* Make native selects match input styling across browsers (esp. Safari) */
@@ -77,10 +89,15 @@ select {
   -webkit-appearance: none;
   appearance: none;
   padding-right: 2.25rem;
-  background-image: linear-gradient(45deg, transparent 50%, rgba(230, 237, 243, 0.7) 50%),
+  background-image:
+    linear-gradient(45deg, transparent 50%, rgba(230, 237, 243, 0.7) 50%),
     linear-gradient(135deg, rgba(230, 237, 243, 0.7) 50%, transparent 50%);
-  background-position: calc(100% - 1.05rem) 50%, calc(100% - 0.75rem) 50%;
-  background-size: 6px 6px, 6px 6px;
+  background-position:
+    calc(100% - 1.05rem) 50%,
+    calc(100% - 0.75rem) 50%;
+  background-size:
+    6px 6px,
+    6px 6px;
   background-repeat: no-repeat;
 }
 
@@ -141,7 +158,9 @@ textarea:disabled {
   padding: 0.75rem 1rem;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 120ms ease, opacity 120ms ease;
+  transition:
+    transform 120ms ease,
+    opacity 120ms ease;
 }
 
 .auth-btn:hover {
@@ -175,7 +194,8 @@ textarea:disabled {
 }
 
 .auth-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
     "Courier New", monospace;
   font-size: 0.9rem;
   color: rgba(230, 237, 243, 0.8);
@@ -686,5 +706,3 @@ button.player-slot.add:disabled {
   border: 2px solid rgba(255, 255, 255, 0.8);
   border-radius: inherit;
 }
-
-

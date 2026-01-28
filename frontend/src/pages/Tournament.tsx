@@ -52,10 +52,13 @@ export default function TournamentPage() {
     setMsg(null);
     setLoading("Starting group…");
     try {
-      const res = await request<{ round_id: number }>(`/api/v1/tournaments/${t.id}/rounds`, {
-        method: "POST",
-        body: JSON.stringify({ group_id: groupId }),
-      });
+      const res = await request<{ round_id: number }>(
+        `/api/v1/tournaments/${t.id}/rounds`,
+        {
+          method: "POST",
+          body: JSON.stringify({ group_id: groupId }),
+        },
+      );
       navigate(`/rounds/${res.round_id}`);
     } catch (e) {
       const err = e as ApiError;
@@ -64,7 +67,11 @@ export default function TournamentPage() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to start group (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to start group (${err.status}).`,
+      );
     } finally {
       setLoading(null);
     }
@@ -94,7 +101,7 @@ export default function TournamentPage() {
     try {
       const res = await request<{ round_id: number }>(
         `/api/v1/tournaments/${t.id}/rounds/${roundId}/join`,
-        { method: "POST" }
+        { method: "POST" },
       );
       navigate(`/rounds/${res.round_id}`);
     } catch (e) {
@@ -104,7 +111,11 @@ export default function TournamentPage() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to join group (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to join group (${err.status}).`,
+      );
     } finally {
       setLoading(null);
     }
@@ -114,16 +125,20 @@ export default function TournamentPage() {
     if (!t) return;
     if (t.completed_at || t.paused_at) return;
 
-    const message = window.prompt("Pause message (optional)", t.pause_message ?? "") ?? "";
+    const message =
+      window.prompt("Pause message (optional)", t.pause_message ?? "") ?? "";
 
     setError(null);
     setMsg(null);
     setLoading("Pausing tournament…");
     try {
-      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/pause`, {
-        method: "POST",
-        body: JSON.stringify({ message }),
-      });
+      const updated = await request<Tournament>(
+        `/api/v1/tournaments/${t.id}/pause`,
+        {
+          method: "POST",
+          body: JSON.stringify({ message }),
+        },
+      );
       setT(updated);
     } catch (e) {
       const err = e as ApiError;
@@ -141,7 +156,10 @@ export default function TournamentPage() {
     setMsg(null);
     setLoading("Resuming tournament…");
     try {
-      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/resume`, { method: "POST" });
+      const updated = await request<Tournament>(
+        `/api/v1/tournaments/${t.id}/resume`,
+        { method: "POST" },
+      );
       setT(updated);
     } catch (e) {
       const err = e as ApiError;
@@ -159,7 +177,7 @@ export default function TournamentPage() {
     const ok = window.confirm(
       hasActive
         ? `Finish tournament? There are ${t.active_groups_count} group(s) still playing.`
-        : "Finish tournament?"
+        : "Finish tournament?",
     );
     if (!ok) return;
 
@@ -167,7 +185,10 @@ export default function TournamentPage() {
     setMsg(null);
     setLoading("Finishing tournament…");
     try {
-      const updated = await request<Tournament>(`/api/v1/tournaments/${t.id}/finish`, { method: "POST" });
+      const updated = await request<Tournament>(
+        `/api/v1/tournaments/${t.id}/finish`,
+        { method: "POST" },
+      );
       setT(updated);
       setMsg("Tournament finished.");
     } catch (e) {
@@ -181,7 +202,7 @@ export default function TournamentPage() {
   async function deleteTournament() {
     if (!t) return;
     const ok = window.confirm(
-      "Delete tournament? This will remove invites/members. Existing rounds will remain but no longer be linked to the tournament."
+      "Delete tournament? This will remove invites/members. Existing rounds will remain but no longer be linked to the tournament.",
     );
     if (!ok) return;
 
@@ -195,11 +216,13 @@ export default function TournamentPage() {
       const err = e as ApiError;
       if (err.status === 409) {
         const force = window.confirm(
-          "There are players mid-round in this tournament. Delete anyway?"
+          "There are players mid-round in this tournament. Delete anyway?",
         );
         if (!force) return;
         try {
-          await request(`/api/v1/tournaments/${t.id}?force=true`, { method: "DELETE" });
+          await request(`/api/v1/tournaments/${t.id}?force=true`, {
+            method: "DELETE",
+          });
           navigate("/tournaments");
           return;
         } catch (e2) {
@@ -236,7 +259,11 @@ export default function TournamentPage() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to send invite (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to send invite (${err.status}).`,
+      );
     } finally {
       setLoading(null);
     }
@@ -247,7 +274,10 @@ export default function TournamentPage() {
       <div className="auth-card content-narrow">
         <h1 className="auth-title">Tournament</h1>
         <p className="auth-subtitle">Log in to view tournament leaderboards.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
@@ -281,9 +311,15 @@ export default function TournamentPage() {
                     {t.completed_at ? " · Finished" : ""}
                     {t.paused_at && !t.completed_at ? " · Paused" : ""}
                   </div>
-                  <div className="auth-mono">Host: {t.owner_name ?? t.owner_id}</div>
+                  <div className="auth-mono">
+                    Host: {t.owner_name ?? t.owner_id}
+                  </div>
                 </div>
-                <button className="auth-btn secondary" onClick={() => void load(t.id)} disabled={!!loading}>
+                <button
+                  className="auth-btn secondary"
+                  onClick={() => void load(t.id)}
+                  disabled={!!loading}
+                >
                   Refresh
                 </button>
               </div>
@@ -297,7 +333,10 @@ export default function TournamentPage() {
                 </div>
               )}
 
-              <div className="auth-row" style={{ justifyContent: "space-between", marginTop: ".75rem" }}>
+              <div
+                className="auth-row"
+                style={{ justifyContent: "space-between", marginTop: ".75rem" }}
+              >
                 <div className="auth-mono">Groups: {t.groups.length}</div>
                 {!t.completed_at && (
                   <div className="auth-row">
@@ -306,7 +345,9 @@ export default function TournamentPage() {
                       onClick={() => void startMyGroup()}
                       disabled={!!loading || (!!t.paused_at && !t.completed_at)}
                     >
-                      {t.my_group_round_id ? "Go to my group" : "Start my group"}
+                      {t.my_group_round_id
+                        ? "Go to my group"
+                        : "Start my group"}
                     </button>
                   </div>
                 )}
@@ -330,12 +371,20 @@ export default function TournamentPage() {
                       >
                         Resume tournament
                       </button>
-                      <button className="auth-btn secondary" onClick={() => void finishTournament()} disabled={!!loading}>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => void finishTournament()}
+                        disabled={!!loading}
+                      >
                         Finish tournament
                       </button>
                     </>
                   )}
-                  <button className="auth-btn secondary" onClick={() => void deleteTournament()} disabled={!!loading}>
+                  <button
+                    className="auth-btn secondary"
+                    onClick={() => void deleteTournament()}
+                    disabled={!!loading}
+                  >
                     Delete tournament
                   </button>
                 </div>
@@ -345,9 +394,14 @@ export default function TournamentPage() {
 
           {!t.completed_at && !t.is_public && t.owner_id === viewerId && (
             <div className="content-narrow">
-              <div className="auth-card" style={{ display: "grid", gap: ".5rem" }}>
+              <div
+                className="auth-card"
+                style={{ display: "grid", gap: ".5rem" }}
+              >
                 <div style={{ fontWeight: 800 }}>Invite players</div>
-                <div className="auth-mono">Private tournaments are invite-only.</div>
+                <div className="auth-mono">
+                  Private tournaments are invite-only.
+                </div>
                 <input
                   value={inviteRecipient}
                   onChange={(e) => setInviteRecipient(e.target.value)}
@@ -368,7 +422,9 @@ export default function TournamentPage() {
           )}
 
           <div className="auth-card">
-            <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Leaderboard</div>
+            <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>
+              Leaderboard
+            </div>
             {!t.leaderboard.length ? (
               <div className="auth-mono">No scores yet.</div>
             ) : (
@@ -390,18 +446,34 @@ export default function TournamentPage() {
                   <div className="auth-mono">Group</div>
 
                   {t.leaderboard.map((e, idx) => (
-                    <div key={`${e.player_id}-${e.group_round_id}`} style={{ display: "contents" }}>
+                    <div
+                      key={`${e.player_id}-${e.group_round_id}`}
+                      style={{ display: "contents" }}
+                    >
                       <div className="auth-mono">{idx + 1}</div>
-                      <div style={{ fontWeight: 700, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <div
+                        style={{
+                          fontWeight: 700,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                        }}
+                      >
                         {e.player_name}
                       </div>
                       <div className="auth-mono">
-                        {e.score_to_par === 0 ? "E" : e.score_to_par > 0 ? `+${e.score_to_par}` : e.score_to_par}
+                        {e.score_to_par === 0
+                          ? "E"
+                          : e.score_to_par > 0
+                            ? `+${e.score_to_par}`
+                            : e.score_to_par}
                       </div>
                       <div className="auth-mono">{e.strokes}</div>
                       <div className="auth-mono">{e.holes_completed}</div>
                       <div className="auth-mono">{e.current_hole ?? "—"}</div>
-                      <Link className="auth-btn secondary" to={`/rounds/${e.group_round_id}`}>
+                      <Link
+                        className="auth-btn secondary"
+                        to={`/rounds/${e.group_round_id}`}
+                      >
                         Scorecard
                       </Link>
                     </div>
@@ -413,13 +485,17 @@ export default function TournamentPage() {
 
           {!t.completed_at && (
             <div className="auth-card">
-              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>Groups</div>
+              <div style={{ fontWeight: 800, marginBottom: ".5rem" }}>
+                Groups
+              </div>
               {!t.groups.length ? (
                 <div className="auth-mono">No groups yet.</div>
               ) : (
                 <div className="stack">
                   {t.groups.map((g) => {
-                    const isMine = !!t.my_group_round_id && g.round_id === t.my_group_round_id;
+                    const isMine =
+                      !!t.my_group_round_id &&
+                      g.round_id === t.my_group_round_id;
                     const canJoinOthers = !t.my_group_round_id;
 
                     return (
@@ -451,8 +527,12 @@ export default function TournamentPage() {
                             {g.round_id == null ? (
                               <div className="auth-mono">Not started</div>
                             ) : (
-                              <div className="auth-mono" style={{ wordBreak: "break-word" }}>
-                                Players: {g.players_count} · Leader: {g.owner_name ?? g.owner_id}
+                              <div
+                                className="auth-mono"
+                                style={{ wordBreak: "break-word" }}
+                              >
+                                Players: {g.players_count} · Leader:{" "}
+                                {g.owner_name ?? g.owner_id}
                               </div>
                             )}
                           </div>
@@ -461,7 +541,10 @@ export default function TournamentPage() {
                               <button
                                 className="auth-btn primary"
                                 onClick={() => void startGroup(g.id)}
-                                disabled={!!loading || (!!t.paused_at && !t.completed_at)}
+                                disabled={
+                                  !!loading ||
+                                  (!!t.paused_at && !t.completed_at)
+                                }
                               >
                                 Start
                               </button>
@@ -471,13 +554,20 @@ export default function TournamentPage() {
                                   <button
                                     className="auth-btn primary"
                                     onClick={() => void joinGroup(g.round_id!)}
-                                    disabled={!!loading || (!!t.paused_at && !t.completed_at)}
+                                    disabled={
+                                      !!loading ||
+                                      (!!t.paused_at && !t.completed_at)
+                                    }
                                   >
                                     Join
                                   </button>
                                 )}
                                 <Link
-                                  className={isMine ? "auth-btn primary" : "auth-btn secondary"}
+                                  className={
+                                    isMine
+                                      ? "auth-btn primary"
+                                      : "auth-btn secondary"
+                                  }
                                   to={`/rounds/${g.round_id!}`}
                                 >
                                   Open

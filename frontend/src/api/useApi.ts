@@ -1,6 +1,7 @@
 import { useAuth0 } from "@auth0/auth0-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+const API_BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
 const AUDIENCE = import.meta.env.VITE_AUTH0_AUDIENCE;
 
 type ApiError = {

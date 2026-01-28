@@ -15,7 +15,7 @@ const looksPlaceholder =
 
 if (!domain || !clientId || looksPlaceholder) {
   console.error(
-    "Auth0 config missing: set real VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID in frontend/.env (see frontend/.env.example)."
+    "Auth0 config missing: set real VITE_AUTH0_DOMAIN and VITE_AUTH0_CLIENT_ID in frontend/.env (see frontend/.env.example).",
   );
   throw new Error("Missing Auth0 configuration");
 }
@@ -32,5 +32,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     >
       <RouterProvider router={router} />
     </Auth0Provider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

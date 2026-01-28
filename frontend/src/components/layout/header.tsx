@@ -17,20 +17,27 @@ export default function Header() {
       </nav>
 
       {!isAuthenticated ? (
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       ) : (
         <div className="auth-row">
           <button
             className="auth-btn secondary"
-            onClick={() => loginWithRedirect({ authorizationParams: { prompt: "login" } })}
+            onClick={() =>
+              loginWithRedirect({ authorizationParams: { prompt: "login" } })
+            }
           >
             Switch account
           </button>
           <button
             className="auth-btn secondary"
-            onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+            onClick={() =>
+              logout({ logoutParams: { returnTo: window.location.origin } })
+            }
           >
             Log out
           </button>

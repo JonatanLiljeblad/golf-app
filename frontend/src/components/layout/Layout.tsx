@@ -20,7 +20,8 @@ export default function Layout() {
     void (async () => {
       try {
         const me = await request<Player>("/api/v1/players/me");
-        if (!me.email || !me.username) navigate("/profile?required=1", { replace: true });
+        if (!me.email || !me.username)
+          navigate("/profile?required=1", { replace: true });
       } catch {
         // ignore
       }

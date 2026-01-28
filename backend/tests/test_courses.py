@@ -87,6 +87,46 @@ def test_create_and_list_courses(client):
     assert resp3.json() == []
 
 
+def test_update_course_idempotent(client):
+    payload = {
+        "name": "Stable Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+        "tees": [
+            {
+                "tee_name": "White",
+                "course_rating_men": 72.0,
+                "slope_rating_men": 113,
+                "course_rating_women": 72.0,
+                "slope_rating_women": 113,
+                "course_rating": 72.0,
+                "slope_rating": 113,
+                "hole_distances": [
+                    {"hole_number": i, "distance": 350} for i in range(1, 10)
+                ],
+            }
+        ],
+    }
+
+    created = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
+    assert created.status_code == 201
+    course = created.json()
+    tee_id = course["tees"][0]["id"]
+
+    payload2 = {**payload}
+    payload2["tees"] = [{**payload["tees"][0], "id": tee_id}]
+
+    updated = client.put(
+        f"/api/v1/courses/{course['id']}",
+        json=payload2,
+        headers={"X-User-Id": "u1"},
+    )
+    assert updated.status_code == 200
+    course2 = updated.json()
+    assert course2["id"] == course["id"]
+    assert course2["name"] == course["name"]
+    assert course2["tees"][0]["id"] == tee_id
+
+
 def test_cannot_archive_course_with_active_rounds(client):
     payload = {
         "name": "Shared Course",
@@ -141,3 +181,79 @@ def test_cannot_archive_course_with_active_rounds(client):
     resp3 = client.get("/api/v1/courses", headers={"X-User-Id": "u1"})
     assert resp3.status_code == 200
     assert resp3.json() == []
+
+
+def test_update_course_without_changes(client):
+    """Test that saving a course without changes doesn't cause an error."""
+    payload = {
+        "name": "Test Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+        "tees": [
+            {
+                "tee_name": "White",
+                "course_rating_men": 72.0,
+                "slope_rating_men": 113,
+                "course_rating_women": 70.0,
+                "slope_rating_women": 110,
+                "course_rating": 72.0,
+                "slope_rating": 113,
+                "hole_distances": [
+                    {"hole_number": i, "distance": 350} for i in range(1, 10)
+                ],
+            }
+        ],
+    }
+
+    # Create course
+    resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
+    assert resp.status_code == 201
+    course = resp.json()
+    course_id = course["id"]
+
+    # Update with the exact same payload (simulates user clicking Save without changes)
+    resp2 = client.put(f"/api/v1/courses/{course_id}", json=payload, headers={"X-User-Id": "u1"})
+    assert resp2.status_code == 200
+    updated = resp2.json()
+    assert updated["name"] == "Test Course"
+    assert len(updated["holes"]) == 9
+    assert len(updated["tees"]) == 1
+    assert updated["tees"][0]["tee_name"] == "White"
+
+
+def test_update_course_with_changes(client):
+    """Test that updating a course with changes works correctly."""
+    payload = {
+        "name": "Test Course",
+        "holes": [{"number": i, "par": 4} for i in range(1, 10)],
+        "tees": [
+            {
+                "tee_name": "White",
+                "course_rating_men": 72.0,
+                "slope_rating_men": 113,
+                "course_rating_women": 70.0,
+                "slope_rating_women": 110,
+                "course_rating": 72.0,
+                "slope_rating": 113,
+                "hole_distances": [
+                    {"hole_number": i, "distance": 350} for i in range(1, 10)
+                ],
+            }
+        ],
+    }
+
+    # Create course
+    resp = client.post("/api/v1/courses", json=payload, headers={"X-User-Id": "u1"})
+    assert resp.status_code == 201
+    course = resp.json()
+    course_id = course["id"]
+
+    # Update with changes
+    updated_payload = payload.copy()
+    updated_payload["name"] = "Updated Course"
+    updated_payload["tees"][0]["hole_distances"][0]["distance"] = 360
+    
+    resp2 = client.put(f"/api/v1/courses/{course_id}", json=updated_payload, headers={"X-User-Id": "u1"})
+    assert resp2.status_code == 200
+    updated = resp2.json()
+    assert updated["name"] == "Updated Course"
+    assert updated["tees"][0]["hole_distances"][0]["distance"] == 360

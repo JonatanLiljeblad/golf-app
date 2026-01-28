@@ -43,7 +43,9 @@ export default function Friends() {
 
   const [friends, setFriends] = useState<Player[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
-  const [activeTab, setActiveTab] = useState<"friends" | "requests" | "activity">("friends");
+  const [activeTab, setActiveTab] = useState<
+    "friends" | "requests" | "activity"
+  >("friends");
 
   const [activity, setActivity] = useState<FriendActivityEvent[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
@@ -54,7 +56,10 @@ export default function Friends() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  const friendIds = useMemo(() => new Set(friends.map((f) => f.external_id)), [friends]);
+  const friendIds = useMemo(
+    () => new Set(friends.map((f) => f.external_id)),
+    [friends],
+  );
 
   async function loadFriends() {
     try {
@@ -63,7 +68,9 @@ export default function Friends() {
     } catch (e) {
       const err = e as ApiError;
       if (err.status === 503) {
-        setError("Friends feature needs DB migration (run: cd backend && alembic upgrade head)");
+        setError(
+          "Friends feature needs DB migration (run: cd backend && alembic upgrade head)",
+        );
       }
     }
   }
@@ -80,7 +87,9 @@ export default function Friends() {
   async function loadActivity() {
     setActivityLoading(true);
     try {
-      const data = await request<FriendActivityEvent[]>("/api/v1/friends/activity");
+      const data = await request<FriendActivityEvent[]>(
+        "/api/v1/friends/activity",
+      );
       setActivity(data);
     } catch {
       // ignore
@@ -100,7 +109,9 @@ export default function Friends() {
     setMsg(null);
     setLoading("Searching…");
     try {
-      const data = await request<Player[]>(`/api/v1/players?q=${encodeURIComponent(needle)}`);
+      const data = await request<Player[]>(
+        `/api/v1/players?q=${encodeURIComponent(needle)}`,
+      );
       setResults(data);
       if (!data.length) {
         setMsg("No users found with that information.");
@@ -119,17 +130,29 @@ export default function Friends() {
     setError(null);
     setMsg(null);
     try {
-      const res = await request<{ ok: boolean; accepted?: boolean }>("/api/v1/friends/requests", {
-        method: "POST",
-        body: JSON.stringify({ ref }),
-      });
-      setMsg(res.accepted ? "Friend request accepted." : "Friend request sent.");
+      const res = await request<{ ok: boolean; accepted?: boolean }>(
+        "/api/v1/friends/requests",
+        {
+          method: "POST",
+          body: JSON.stringify({ ref }),
+        },
+      );
+      setMsg(
+        res.accepted ? "Friend request accepted." : "Friend request sent.",
+      );
       await Promise.all([loadFriends(), loadRequests()]);
     } catch (e) {
       const err = e as ApiError;
-      const detail = err.body && typeof err.body === "object" && "detail" in err.body ? (err.body as { detail?: unknown }).detail : null;
+      const detail =
+        err.body && typeof err.body === "object" && "detail" in err.body
+          ? (err.body as { detail?: unknown }).detail
+          : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to send request (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to send request (${err.status}).`,
+      );
     }
   }
 
@@ -137,7 +160,9 @@ export default function Friends() {
     setError(null);
     setMsg(null);
     try {
-      await request(`/api/v1/friends/${encodeURIComponent(externalId)}`, { method: "DELETE" });
+      await request(`/api/v1/friends/${encodeURIComponent(externalId)}`, {
+        method: "DELETE",
+      });
       setMsg("Removed friend.");
       await loadFriends();
     } catch (e) {
@@ -150,7 +175,9 @@ export default function Friends() {
     setError(null);
     setMsg(null);
     try {
-      await request(`/api/v1/friends/requests/${id}/accept`, { method: "POST" });
+      await request(`/api/v1/friends/requests/${id}/accept`, {
+        method: "POST",
+      });
       setMsg("Friend request accepted.");
       await Promise.all([loadFriends(), loadRequests()]);
     } catch (e) {
@@ -163,7 +190,9 @@ export default function Friends() {
     setError(null);
     setMsg(null);
     try {
-      await request(`/api/v1/friends/requests/${id}/decline`, { method: "POST" });
+      await request(`/api/v1/friends/requests/${id}/decline`, {
+        method: "POST",
+      });
       setMsg("Friend request declined.");
       await loadRequests();
     } catch (e) {
@@ -195,7 +224,10 @@ export default function Friends() {
       <div className="auth-card content-narrow">
         <h1 className="auth-title">Friends</h1>
         <p className="auth-subtitle">Log in to find and add friends.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
@@ -216,26 +248,49 @@ export default function Friends() {
       )}
 
       <div className="auth-card" style={{ display: "grid", gap: ".75rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "1rem",
+            alignItems: "center",
+          }}
+        >
           <div>
-            <h1 className="auth-title" style={{ marginBottom: ".25rem" }}>Friends</h1>
-            <p className="auth-subtitle">Search for users and send friend requests.</p>
+            <h1 className="auth-title" style={{ marginBottom: ".25rem" }}>
+              Friends
+            </h1>
+            <p className="auth-subtitle">
+              Search for users and send friend requests.
+            </p>
           </div>
           <div className="auth-row">
             <button
-              className={activeTab === "friends" ? "auth-btn primary" : "auth-btn secondary"}
+              className={
+                activeTab === "friends"
+                  ? "auth-btn primary"
+                  : "auth-btn secondary"
+              }
               onClick={() => setActiveTab("friends")}
             >
               Friends
             </button>
             <button
-              className={activeTab === "requests" ? "auth-btn primary" : "auth-btn secondary"}
+              className={
+                activeTab === "requests"
+                  ? "auth-btn primary"
+                  : "auth-btn secondary"
+              }
               onClick={() => setActiveTab("requests")}
             >
               Friend requests{requests.length ? ` (${requests.length})` : ""}
             </button>
             <button
-              className={activeTab === "activity" ? "auth-btn primary" : "auth-btn secondary"}
+              className={
+                activeTab === "activity"
+                  ? "auth-btn primary"
+                  : "auth-btn secondary"
+              }
               onClick={() => setActiveTab("activity")}
             >
               Activity
@@ -245,9 +300,16 @@ export default function Friends() {
 
         {activeTab === "activity" ? (
           <div style={{ display: "grid", gap: ".5rem" }}>
-            <div className="auth-row" style={{ justifyContent: "space-between" }}>
+            <div
+              className="auth-row"
+              style={{ justifyContent: "space-between" }}
+            >
               <div style={{ fontWeight: 800 }}>Activity</div>
-              <button className="auth-btn secondary" onClick={() => void loadActivity()} disabled={activityLoading}>
+              <button
+                className="auth-btn secondary"
+                onClick={() => void loadActivity()}
+                disabled={activityLoading}
+              >
                 {activityLoading ? "Loading…" : "Refresh"}
               </button>
             </div>
@@ -257,13 +319,22 @@ export default function Friends() {
             ) : (
               <div style={{ display: "grid", gap: ".5rem" }}>
                 {activity.map((ev) => (
-                  <div key={ev.id} className="auth-card" style={{ padding: ".75rem" }}>
+                  <div
+                    key={ev.id}
+                    className="auth-card"
+                    style={{ padding: ".75rem" }}
+                  >
                     <div style={{ fontWeight: 800 }}>
-                      {(ev.player.name || ev.player.username || ev.player.external_id) ?? "Player"} made {kindLabel(ev.kind)}
+                      {(ev.player.name ||
+                        ev.player.username ||
+                        ev.player.external_id) ??
+                        "Player"}{" "}
+                      made {kindLabel(ev.kind)}
                     </div>
                     {ev.hole_number === 0 ? (
                       <div className="auth-mono">
-                        Round: {ev.strokes} on par {ev.par} ({scoreToParLabel(ev.strokes, ev.par)})
+                        Round: {ev.strokes} on par {ev.par} (
+                        {scoreToParLabel(ev.strokes, ev.par)})
                       </div>
                     ) : (
                       <div className="auth-mono">
@@ -289,7 +360,11 @@ export default function Friends() {
                   if (e.key === "Enter") void search();
                 }}
               />
-              <button className="auth-btn secondary" onClick={() => void search()} disabled={!!loading}>
+              <button
+                className="auth-btn secondary"
+                onClick={() => void search()}
+                disabled={!!loading}
+              >
                 {loading ?? "Search"}
               </button>
             </div>
@@ -298,13 +373,22 @@ export default function Friends() {
               <div style={{ display: "grid", gap: ".5rem" }}>
                 <div style={{ fontWeight: 800 }}>Results</div>
                 {results.map((p) => (
-                  <div key={p.external_id} className="auth-row" style={{ justifyContent: "space-between" }}>
+                  <div
+                    key={p.external_id}
+                    className="auth-row"
+                    style={{ justifyContent: "space-between" }}
+                  >
                     <div>
                       <div style={{ fontWeight: 700 }}>{label(p)}</div>
-                      <div className="auth-mono">{p.email ?? p.username ?? p.external_id}</div>
+                      <div className="auth-mono">
+                        {p.email ?? p.username ?? p.external_id}
+                      </div>
                     </div>
                     <div className="auth-row">
-                      <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(p.external_id)}`}>
+                      <Link
+                        className="auth-btn secondary"
+                        to={`/players/${encodeURIComponent(p.external_id)}`}
+                      >
                         View
                       </Link>
                       <button
@@ -312,7 +396,9 @@ export default function Friends() {
                         disabled={friendIds.has(p.external_id)}
                         onClick={() => void sendRequest(p.external_id)}
                       >
-                        {friendIds.has(p.external_id) ? "Friends" : "Send request"}
+                        {friendIds.has(p.external_id)
+                          ? "Friends"
+                          : "Send request"}
                       </button>
                     </div>
                   </div>
@@ -327,19 +413,38 @@ export default function Friends() {
               <div className="auth-mono">No pending friend requests.</div>
             ) : (
               requests.map((r) => (
-                <div key={r.id} className="auth-row" style={{ justifyContent: "space-between" }}>
+                <div
+                  key={r.id}
+                  className="auth-row"
+                  style={{ justifyContent: "space-between" }}
+                >
                   <div>
-                    <div style={{ fontWeight: 700 }}>{label(r.from_player)}</div>
-                    <div className="auth-mono">{r.from_player.email ?? r.from_player.username ?? r.from_player.external_id}</div>
+                    <div style={{ fontWeight: 700 }}>
+                      {label(r.from_player)}
+                    </div>
+                    <div className="auth-mono">
+                      {r.from_player.email ??
+                        r.from_player.username ??
+                        r.from_player.external_id}
+                    </div>
                   </div>
                   <div className="auth-row">
-                    <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(r.from_player.external_id)}`}>
+                    <Link
+                      className="auth-btn secondary"
+                      to={`/players/${encodeURIComponent(r.from_player.external_id)}`}
+                    >
                       View
                     </Link>
-                    <button className="auth-btn primary" onClick={() => void acceptRequest(r.id)}>
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => void acceptRequest(r.id)}
+                    >
                       Accept
                     </button>
-                    <button className="auth-btn secondary" onClick={() => void declineRequest(r.id)}>
+                    <button
+                      className="auth-btn secondary"
+                      onClick={() => void declineRequest(r.id)}
+                    >
                       Decline
                     </button>
                   </div>
@@ -351,12 +456,24 @@ export default function Friends() {
       </div>
 
       <div className="auth-card" style={{ display: "grid", gap: ".75rem" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "1rem",
+            alignItems: "center",
+          }}
+        >
           <div>
             <div style={{ fontWeight: 800 }}>Your friends</div>
-            <div className="auth-mono">Used for the friend picker when starting a round.</div>
+            <div className="auth-mono">
+              Used for the friend picker when starting a round.
+            </div>
           </div>
-          <button className="auth-btn secondary" onClick={() => void loadFriends()}>
+          <button
+            className="auth-btn secondary"
+            onClick={() => void loadFriends()}
+          >
             Refresh
           </button>
         </div>
@@ -366,16 +483,28 @@ export default function Friends() {
         ) : (
           <div style={{ display: "grid", gap: ".5rem" }}>
             {friends.map((f) => (
-              <div key={f.external_id} className="auth-row" style={{ justifyContent: "space-between" }}>
+              <div
+                key={f.external_id}
+                className="auth-row"
+                style={{ justifyContent: "space-between" }}
+              >
                 <div>
                   <div style={{ fontWeight: 700 }}>{label(f)}</div>
-                  <div className="auth-mono">{f.email ?? f.username ?? f.external_id}</div>
+                  <div className="auth-mono">
+                    {f.email ?? f.username ?? f.external_id}
+                  </div>
                 </div>
                 <div className="auth-row">
-                  <Link className="auth-btn secondary" to={`/players/${encodeURIComponent(f.external_id)}`}>
+                  <Link
+                    className="auth-btn secondary"
+                    to={`/players/${encodeURIComponent(f.external_id)}`}
+                  >
                     View
                   </Link>
-                  <button className="auth-btn secondary" onClick={() => void removeFriend(f.external_id)}>
+                  <button
+                    className="auth-btn secondary"
+                    onClick={() => void removeFriend(f.external_id)}
+                  >
                     Remove
                   </button>
                 </div>

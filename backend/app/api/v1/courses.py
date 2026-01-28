@@ -263,10 +263,21 @@ def update_course(
         tee.slope_rating_men = t_in.slope_rating_men
         tee.course_rating_women = t_in.course_rating_women
         tee.slope_rating_women = t_in.slope_rating_women
-        tee.hole_distances = [
-            TeeHoleDistance(hole_number=d.hole_number, distance=d.distance)
-            for d in sorted(t_in.hole_distances, key=lambda x: x.hole_number)
-        ]
+
+        incoming = sorted(t_in.hole_distances, key=lambda x: x.hole_number)
+        existing_by_hole = {d.hole_number: d for d in tee.hole_distances}
+        next_distances: list[TeeHoleDistance] = []
+
+        # Update in place to avoid insert-before-delete unique constraint violations.
+        for d in incoming:
+            hd = existing_by_hole.get(d.hole_number)
+            if hd is None:
+                hd = TeeHoleDistance(hole_number=d.hole_number, distance=d.distance)
+            else:
+                hd.distance = d.distance
+            next_distances.append(hd)
+
+        tee.hole_distances = next_distances
 
         if tee.id is not None:
             seen_ids.add(tee.id)

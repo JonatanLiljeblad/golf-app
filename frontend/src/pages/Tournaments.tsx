@@ -27,7 +27,7 @@ export default function Tournaments() {
   const [isPublic, setIsPublic] = useState(false);
   const [groupsCount, setGroupsCount] = useState<number>(4);
   const [groupNames, setGroupNames] = useState<string[]>(() =>
-    Array.from({ length: 4 }, (_, i) => `Group ${i + 1}`)
+    Array.from({ length: 4 }, (_, i) => `Group ${i + 1}`),
   );
 
   async function load() {
@@ -54,7 +54,8 @@ export default function Tournaments() {
     try {
       const data = await request<Course[]>("/api/v1/courses");
       setCourses(data);
-      if (data.length && selectedCourseId == null) setSelectedCourseId(data[0].id);
+      if (data.length && selectedCourseId == null)
+        setSelectedCourseId(data[0].id);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to load courses (${err.status}).`);
@@ -72,10 +73,17 @@ export default function Tournaments() {
     setError(null);
     setCreating("Creating tournament…");
     try {
-      const groups = groupNames.map((g, idx) => (g.trim() ? g.trim() : `Group ${idx + 1}`));
+      const groups = groupNames.map((g, idx) =>
+        g.trim() ? g.trim() : `Group ${idx + 1}`,
+      );
       const created = await request<{ id: number }>("/api/v1/tournaments", {
         method: "POST",
-        body: JSON.stringify({ course_id: selectedCourseId, name: trimmed, is_public: isPublic, groups }),
+        body: JSON.stringify({
+          course_id: selectedCourseId,
+          name: trimmed,
+          is_public: isPublic,
+          groups,
+        }),
       });
       navigate(`/tournaments/${created.id}`);
     } catch (e) {
@@ -85,7 +93,11 @@ export default function Tournaments() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to create tournament (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to create tournament (${err.status}).`,
+      );
     } finally {
       setCreating(null);
     }
@@ -94,7 +106,9 @@ export default function Tournaments() {
   async function acceptInvite(inviteId: number) {
     setError(null);
     try {
-      await request(`/api/v1/tournaments/invites/${inviteId}/accept`, { method: "POST" });
+      await request(`/api/v1/tournaments/invites/${inviteId}/accept`, {
+        method: "POST",
+      });
       await load();
     } catch (e) {
       const err = e as ApiError;
@@ -105,7 +119,9 @@ export default function Tournaments() {
   async function declineInvite(inviteId: number) {
     setError(null);
     try {
-      await request(`/api/v1/tournaments/invites/${inviteId}/decline`, { method: "POST" });
+      await request(`/api/v1/tournaments/invites/${inviteId}/decline`, {
+        method: "POST",
+      });
       await load();
     } catch (e) {
       const err = e as ApiError;
@@ -121,7 +137,8 @@ export default function Tournaments() {
   useEffect(() => {
     setGroupNames((prev) => {
       const next = prev.slice(0, groupsCount);
-      for (let i = next.length; i < groupsCount; i++) next.push(`Group ${i + 1}`);
+      for (let i = next.length; i < groupsCount; i++)
+        next.push(`Group ${i + 1}`);
       return next;
     });
   }, [groupsCount]);
@@ -133,8 +150,13 @@ export default function Tournaments() {
     return (
       <div className="auth-card content-narrow">
         <h1 className="auth-title">Tournaments</h1>
-        <p className="auth-subtitle">Log in to view tournaments and leaderboards.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <p className="auth-subtitle">
+          Log in to view tournaments and leaderboards.
+        </p>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
@@ -157,7 +179,9 @@ export default function Tournaments() {
               setTournamentName("");
               setIsPublic(false);
               setGroupsCount(4);
-              setGroupNames(Array.from({ length: 4 }, (_, i) => `Group ${i + 1}`));
+              setGroupNames(
+                Array.from({ length: 4 }, (_, i) => `Group ${i + 1}`),
+              );
               if (courses.length) setSelectedCourseId(courses[0].id);
               else {
                 setSelectedCourseId(null);
@@ -172,15 +196,33 @@ export default function Tournaments() {
       </div>
 
       {createOpen && (
-        <div className="auth-card" style={{ marginTop: ".75rem", display: "grid", gap: ".75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+        <div
+          className="auth-card"
+          style={{ marginTop: ".75rem", display: "grid", gap: ".75rem" }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "1rem",
+              alignItems: "center",
+            }}
+          >
             <div style={{ fontWeight: 800 }}>Create a tournament</div>
-            <button className="auth-btn secondary" onClick={() => setCreateOpen(false)} disabled={!!creating}>
+            <button
+              className="auth-btn secondary"
+              onClick={() => setCreateOpen(false)}
+              disabled={!!creating}
+            >
               Cancel
             </button>
           </div>
 
-          <button className="auth-btn secondary" onClick={() => void loadCourses()} disabled={!!coursesLoading || !!creating}>
+          <button
+            className="auth-btn secondary"
+            onClick={() => void loadCourses()}
+            disabled={!!coursesLoading || !!creating}
+          >
             Refresh courses
           </button>
 
@@ -205,7 +247,11 @@ export default function Tournaments() {
 
           <label style={{ display: "grid", gap: ".25rem" }}>
             <span style={{ fontWeight: 700 }}>Tournament name</span>
-            <input value={tournamentName} onChange={(e) => setTournamentName(e.target.value)} placeholder="e.g. Saturday skins" />
+            <input
+              value={tournamentName}
+              onChange={(e) => setTournamentName(e.target.value)}
+              placeholder="e.g. Saturday skins"
+            />
           </label>
 
           <label className="auth-row" style={{ gap: ".5rem" }}>
@@ -220,7 +266,10 @@ export default function Tournaments() {
 
           <label style={{ display: "grid", gap: ".25rem" }}>
             <span style={{ fontWeight: 700 }}>Groups</span>
-            <select value={groupsCount} onChange={(e) => setGroupsCount(Number(e.target.value))}>
+            <select
+              value={groupsCount}
+              onChange={(e) => setGroupsCount(Number(e.target.value))}
+            >
               {Array.from({ length: 12 }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n}
@@ -249,13 +298,20 @@ export default function Tournaments() {
 
           <button
             className="auth-btn primary"
-            disabled={!selectedCourseId || !tournamentName.trim() || !!creating || !!coursesLoading}
+            disabled={
+              !selectedCourseId ||
+              !tournamentName.trim() ||
+              !!creating ||
+              !!coursesLoading
+            }
             onClick={() => void createTournament()}
           >
             Create tournament
           </button>
 
-          {(coursesLoading || creating) && <div className="auth-mono">{coursesLoading ?? creating}</div>}
+          {(coursesLoading || creating) && (
+            <div className="auth-mono">{coursesLoading ?? creating}</div>
+          )}
         </div>
       )}
 
@@ -283,15 +339,27 @@ export default function Tournaments() {
                 >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontWeight: 800 }}>{i.tournament_name}</div>
-                    <div className="auth-mono" style={{ wordBreak: "break-word" }}>
+                    <div
+                      className="auth-mono"
+                      style={{ wordBreak: "break-word" }}
+                    >
                       From: {i.requester_name}
                     </div>
                   </div>
-                  <div className="auth-row" style={{ flexShrink: 0, marginTop: ".15rem" }}>
-                    <button className="auth-btn primary" onClick={() => void acceptInvite(i.id)}>
+                  <div
+                    className="auth-row"
+                    style={{ flexShrink: 0, marginTop: ".15rem" }}
+                  >
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => void acceptInvite(i.id)}
+                    >
                       Accept
                     </button>
-                    <button className="auth-btn secondary" onClick={() => void declineInvite(i.id)}>
+                    <button
+                      className="auth-btn secondary"
+                      onClick={() => void declineInvite(i.id)}
+                    >
                       Decline
                     </button>
                   </div>
@@ -316,14 +384,24 @@ export default function Tournaments() {
           ) : (
             active.map((t) => (
               <div key={t.id} className="auth-card" style={{ padding: "1rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                  }}
+                >
                   <div>
                     <div style={{ fontWeight: 800 }}>{t.name}</div>
                     <div className="auth-mono">
-                      {t.course_name} · {t.is_public ? "Public" : "Private"} · Groups: {t.groups_count}
+                      {t.course_name} · {t.is_public ? "Public" : "Private"} ·
+                      Groups: {t.groups_count}
                     </div>
                   </div>
-                  <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>
+                  <Link
+                    className="auth-btn secondary"
+                    to={`/tournaments/${t.id}`}
+                  >
                     View
                   </Link>
                 </div>
@@ -335,15 +413,29 @@ export default function Tournaments() {
             <>
               <div style={{ fontWeight: 800, marginTop: ".5rem" }}>History</div>
               {history.map((t) => (
-                <div key={t.id} className="auth-card" style={{ padding: "1rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+                <div
+                  key={t.id}
+                  className="auth-card"
+                  style={{ padding: "1rem" }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: "1rem",
+                    }}
+                  >
                     <div>
                       <div style={{ fontWeight: 800 }}>{t.name}</div>
                       <div className="auth-mono">
-                        {t.course_name} · {t.is_public ? "Public" : "Private"} · Finished · Groups: {t.groups_count}
+                        {t.course_name} · {t.is_public ? "Public" : "Private"} ·
+                        Finished · Groups: {t.groups_count}
                       </div>
                     </div>
-                    <Link className="auth-btn secondary" to={`/tournaments/${t.id}`}>
+                    <Link
+                      className="auth-btn secondary"
+                      to={`/tournaments/${t.id}`}
+                    >
                       View
                     </Link>
                   </div>

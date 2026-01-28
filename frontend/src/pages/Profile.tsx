@@ -21,14 +21,8 @@ function parseHandicapFromInput(raw: string): number | null {
 }
 
 export default function Profile() {
-  const {
-    isAuthenticated,
-    isLoading,
-    error,
-    loginWithRedirect,
-    logout,
-    user,
-  } = useAuth0();
+  const { isAuthenticated, isLoading, error, loginWithRedirect, logout, user } =
+    useAuth0();
   const { request } = useApi();
   const location = useLocation();
 
@@ -85,7 +79,9 @@ export default function Profile() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const m = detail != null ? String(detail) : null;
-      setApiError(m ? `${m} (${err.status}).` : `Failed to save (${err.status}).`);
+      setApiError(
+        m ? `${m} (${err.status}).` : `Failed to save (${err.status}).`,
+      );
     } finally {
       setSaving(false);
     }
@@ -122,7 +118,9 @@ export default function Profile() {
 
       <div className="auth-card">
         <h1 className="auth-title">Profile</h1>
-        <p className="auth-subtitle">Set your username/email so others can add you to a round.</p>
+        <p className="auth-subtitle">
+          Set your username/email so others can add you to a round.
+        </p>
         {location.search.includes("required=1") && (
           <div className="auth-mono" style={{ marginTop: ".5rem" }}>
             Complete your profile (email + username) to continue.
@@ -131,13 +129,18 @@ export default function Profile() {
 
         <div className="auth-row">
           {!isAuthenticated ? (
-            <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+            <button
+              className="auth-btn primary"
+              onClick={() => loginWithRedirect()}
+            >
               Log in
             </button>
           ) : (
             <button
               className="auth-btn secondary"
-              onClick={() => logout({ logoutParams: { returnTo: window.location.origin } })}
+              onClick={() =>
+                logout({ logoutParams: { returnTo: window.location.origin } })
+              }
             >
               Log out
             </button>
@@ -146,7 +149,11 @@ export default function Profile() {
 
         {isAuthenticated && user && (
           <div className="auth-user">
-            <img className="auth-avatar" src={user.picture} alt={user.name ?? "User"} />
+            <img
+              className="auth-avatar"
+              src={user.picture}
+              alt={user.name ?? "User"}
+            />
             <div>
               <div style={{ fontWeight: 800 }}>{user.name}</div>
               <div className="auth-mono">{user.email}</div>
@@ -181,11 +188,20 @@ export default function Profile() {
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Username *</span>
-              <input required value={username} onChange={(e) => setUsername(e.target.value)} placeholder="yourname" />
+              <input
+                required
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="yourname"
+              />
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Name</span>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" />
+              <input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Full name"
+              />
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Handicap</span>
@@ -197,7 +213,12 @@ export default function Profile() {
             </label>
             <label style={{ display: "grid", gap: ".25rem" }}>
               <span style={{ fontWeight: 700 }}>Gender</span>
-              <select value={gender} onChange={(e) => setGender(e.target.value as "men" | "women" | "")}>
+              <select
+                value={gender}
+                onChange={(e) =>
+                  setGender(e.target.value as "men" | "women" | "")
+                }
+              >
                 <option value="">—</option>
                 <option value="men">Men</option>
                 <option value="women">Women</option>
@@ -217,8 +238,6 @@ export default function Profile() {
           </div>
         )}
       </div>
-
-
     </div>
   );
 }

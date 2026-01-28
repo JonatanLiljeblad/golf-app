@@ -11,12 +11,16 @@ vi.mock("@auth0/auth0-react", () => ({
 
 describe("Home", () => {
   it("renders logged-out content", () => {
-    auth0State = { isAuthenticated: false, loginWithRedirect: vi.fn(), user: null };
+    auth0State = {
+      isAuthenticated: false,
+      loginWithRedirect: vi.fn(),
+      user: null,
+    };
 
     render(
       <MemoryRouter>
         <Home />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByRole("heading", { name: /golf app/i })).toBeDefined();
@@ -33,7 +37,7 @@ describe("Home", () => {
     render(
       <MemoryRouter>
         <Home />
-      </MemoryRouter>
+      </MemoryRouter>,
     );
 
     expect(screen.getByText(/logged in as jonatan\./i)).toBeDefined();

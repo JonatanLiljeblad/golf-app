@@ -241,9 +241,7 @@ def list_friend_activity(
 ):
     me = ensure_player(db, user_id)
     try:
-        friend_ids = db.execute(select(Friend.friend_player_id).where(Friend.player_id == me.id)).scalars().all()
-        if not friend_ids:
-            return []
+        friend_ids = select(Friend.friend_player_id).where(Friend.player_id == me.id)
 
         rows = db.execute(
             select(ActivityEvent, Player)

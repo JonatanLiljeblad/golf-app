@@ -6,7 +6,11 @@ import type { Course, Player, Round } from "../api/types";
 
 type ApiError = { status: number; body: unknown };
 
-type GuestPlayer = { name: string; handicap: number | null; gender: "men" | "women" | null };
+type GuestPlayer = {
+  name: string;
+  handicap: number | null;
+  gender: "men" | "women" | null;
+};
 
 function parseHandicapFromInput(raw: string): number | null {
   const s = raw.trim();
@@ -32,8 +36,11 @@ export default function StartRound() {
   const [selectedTeeId, setSelectedTeeId] = useState<number | null>(null);
 
   const selectedCourse = useMemo(
-    () => (selectedCourseId != null ? courses.find((c) => c.id === selectedCourseId) ?? null : null),
-    [courses, selectedCourseId]
+    () =>
+      selectedCourseId != null
+        ? (courses.find((c) => c.id === selectedCourseId) ?? null)
+        : null,
+    [courses, selectedCourseId],
   );
 
   const tees = selectedCourse?.tees ?? [];
@@ -44,12 +51,28 @@ export default function StartRound() {
   const [friendFilter, setFriendFilter] = useState("");
   const [selectedFriend, setSelectedFriend] = useState("");
 
+  const filteredFriends = useMemo(() => {
+    const q = friendFilter.trim().toLowerCase();
+    return friends.filter((f) => {
+      if (f.external_id === viewerId) return false;
+      if (friendPlayerIds.includes(f.external_id)) return false;
+      if (!q) return true;
+      const hay =
+        `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [friendFilter, friendPlayerIds, friends, viewerId]);
+
   const [addPlayerModalOpen, setAddPlayerModalOpen] = useState(false);
-  const [addPlayerView, setAddPlayerView] = useState<"menu" | "friend" | "guest" | "search">("menu");
+  const [addPlayerView, setAddPlayerView] = useState<
+    "menu" | "friend" | "guest" | "search"
+  >("menu");
 
   const [playerSearchQ, setPlayerSearchQ] = useState("");
   const [playerSearchResults, setPlayerSearchResults] = useState<Player[]>([]);
-  const [playerSearchLoading, setPlayerSearchLoading] = useState<string | null>(null);
+  const [playerSearchLoading, setPlayerSearchLoading] = useState<string | null>(
+    null,
+  );
   const [playerSearchMsg, setPlayerSearchMsg] = useState<string | null>(null);
   const [playerLookup, setPlayerLookup] = useState<Record<string, Player>>({});
 
@@ -72,7 +95,8 @@ export default function StartRound() {
     try {
       const data = await request<Course[]>("/api/v1/courses");
       setCourses(data);
-      if (data.length && selectedCourseId == null) setSelectedCourseId(data[0].id);
+      if (data.length && selectedCourseId == null)
+        setSelectedCourseId(data[0].id);
     } catch (e) {
       const err = e as ApiError;
       setError(`Failed to load courses (${err.status}).`);
@@ -114,8 +138,14 @@ export default function StartRound() {
         .map((s) => s.trim())
         .filter(Boolean);
 
-      const player_ids = Array.from(new Set([...friendPlayerIds, ...manual_ids]));
-      const guest_players = guestPlayers.map((g) => ({ name: g.name, handicap: g.handicap, gender: g.gender }));
+      const player_ids = Array.from(
+        new Set([...friendPlayerIds, ...manual_ids]),
+      );
+      const guest_players = guestPlayers.map((g) => ({
+        name: g.name,
+        handicap: g.handicap,
+        gender: g.gender,
+      }));
 
       const created = await request<Round>("/api/v1/rounds", {
         method: "POST",
@@ -136,7 +166,11 @@ export default function StartRound() {
           ? (err.body as { detail?: unknown }).detail
           : null;
       const msg = detail != null ? String(detail) : null;
-      setError(msg ? `${msg} (${err.status}).` : `Failed to start round (${err.status}).`);
+      setError(
+        msg
+          ? `${msg} (${err.status}).`
+          : `Failed to start round (${err.status}).`,
+      );
     } finally {
       setLoading(null);
     }
@@ -182,7 +216,9 @@ export default function StartRound() {
     setPlayerSearchMsg(null);
     setPlayerSearchLoading("Searching…");
     try {
-      const data = await request<Player[]>(`/api/v1/players?q=${encodeURIComponent(needle)}`);
+      const data = await request<Player[]>(
+        `/api/v1/players?q=${encodeURIComponent(needle)}`,
+      );
       setPlayerSearchResults(data);
       setPlayerSearchMsg(!data.length ? "No players found." : null);
       setPlayerLookup((prev) => {
@@ -203,7 +239,9 @@ export default function StartRound() {
   }
 
   function selectedPlayersCount(): number {
-    const manualCount = otherPlayerIds.slice(0, maxManualPlayerSlots()).filter((x) => x.trim()).length;
+    const manualCount = otherPlayerIds
+      .slice(0, maxManualPlayerSlots())
+      .filter((x) => x.trim()).length;
     return 1 + friendPlayerIds.length + manualCount + guestPlayers.length;
   }
 
@@ -215,7 +253,10 @@ export default function StartRound() {
       setError("You are already in the round");
       return;
     }
-    if (friendPlayerIds.includes(trimmed) || otherPlayerIds.some((x) => x.trim() === trimmed)) {
+    if (
+      friendPlayerIds.includes(trimmed) ||
+      otherPlayerIds.some((x) => x.trim() === trimmed)
+    ) {
       setError("Player already added");
       return;
     }
@@ -234,7 +275,14 @@ export default function StartRound() {
       setError("max 4 players");
       return;
     }
-    setGuestPlayers((prev) => [...prev, { name: n, handicap: parseHandicapFromInput(guestHandicap), gender: guestGender || null }]);
+    setGuestPlayers((prev) => [
+      ...prev,
+      {
+        name: n,
+        handicap: parseHandicapFromInput(guestHandicap),
+        gender: guestGender || null,
+      },
+    ]);
     setGuestName("");
     setGuestHandicap("");
     setGuestGender("");
@@ -245,8 +293,15 @@ export default function StartRound() {
       | { kind: "player"; external_id: string }
       | { kind: "guest"; name: string; idx: number }
     > = [
-      ...friendPlayerIds.map((external_id) => ({ kind: "player" as const, external_id })),
-      ...guestPlayers.map((g, idx) => ({ kind: "guest" as const, name: g.name, idx })),
+      ...friendPlayerIds.map((external_id) => ({
+        kind: "player" as const,
+        external_id,
+      })),
+      ...guestPlayers.map((g, idx) => ({
+        kind: "guest" as const,
+        name: g.name,
+        idx,
+      })),
     ];
     return other;
   }, [friendPlayerIds, guestPlayers]);
@@ -273,8 +328,13 @@ export default function StartRound() {
     return (
       <div className="auth-card content-narrow">
         <h1 className="auth-title">Start New Round</h1>
-        <p className="auth-subtitle">Log in to create rounds and post scores.</p>
-        <button className="auth-btn primary" onClick={() => loginWithRedirect()}>
+        <p className="auth-subtitle">
+          Log in to create rounds and post scores.
+        </p>
+        <button
+          className="auth-btn primary"
+          onClick={() => loginWithRedirect()}
+        >
           Log in
         </button>
       </div>
@@ -295,10 +355,16 @@ export default function StartRound() {
 
       <div className="auth-card" style={{ display: "grid", gap: ".75rem" }}>
         <div style={{ display: "flex", gap: ".5rem", flexWrap: "wrap" }}>
-          <button className="auth-btn secondary" onClick={() => void loadCourses()}>
+          <button
+            className="auth-btn secondary"
+            onClick={() => void loadCourses()}
+          >
             Refresh courses
           </button>
-          <button className="auth-btn secondary" onClick={() => void createDemoCourse()}>
+          <button
+            className="auth-btn secondary"
+            onClick={() => void createDemoCourse()}
+          >
             Create demo course
           </button>
         </div>
@@ -325,7 +391,12 @@ export default function StartRound() {
         {!!tees.length && (
           <label style={{ display: "grid", gap: ".25rem" }}>
             <span style={{ fontWeight: 700 }}>Tee *</span>
-            <select value={selectedTeeId ?? ""} onChange={(e) => setSelectedTeeId(e.target.value ? Number(e.target.value) : null)}>
+            <select
+              value={selectedTeeId ?? ""}
+              onChange={(e) =>
+                setSelectedTeeId(e.target.value ? Number(e.target.value) : null)
+              }
+            >
               <option value="">Select tee…</option>
               {tees.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -346,11 +417,15 @@ export default function StartRound() {
                 onChange={(e) => setStatsEnabled(e.target.checked)}
                 style={{ width: 18, height: 18 }}
               />
-              <span style={{ fontWeight: 700 }}>Enable stats (putts, fairway, GIR)</span>
+              <span style={{ fontWeight: 700 }}>
+                Enable stats (putts, fairway, GIR)
+              </span>
             </label>
-            <div className="auth-mono">If enabled, each hole requires putts + fairway + GIR before continuing.</div>
+            <div className="auth-mono">
+              If enabled, each hole requires putts + fairway + GIR before
+              continuing.
+            </div>
           </div>
-
         </div>
 
         <div style={{ display: "grid", gap: ".75rem" }}>
@@ -375,11 +450,23 @@ export default function StartRound() {
                         alignItems: "flex-start",
                       }}
                     >
-                      <div style={{ fontWeight: 800, minWidth: 0, flex: "1 1 160px" }}>{s.name}</div>
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          minWidth: 0,
+                          flex: "1 1 160px",
+                        }}
+                      >
+                        {s.name}
+                      </div>
                       <button
                         className="auth-btn secondary"
                         style={{ padding: ".35rem .6rem", flexShrink: 0 }}
-                        onClick={() => setGuestPlayers((prev) => prev.filter((_, i) => i !== s.idx))}
+                        onClick={() =>
+                          setGuestPlayers((prev) =>
+                            prev.filter((_, i) => i !== s.idx),
+                          )
+                        }
                       >
                         Remove
                       </button>
@@ -389,8 +476,14 @@ export default function StartRound() {
                 );
               }
 
-              const p = friends.find((f) => f.external_id === s.external_id) ?? playerLookup[s.external_id];
-              const kindLabel = friends.some((f) => f.external_id === s.external_id) ? "friend" : "player";
+              const p =
+                friends.find((f) => f.external_id === s.external_id) ??
+                playerLookup[s.external_id];
+              const kindLabel = friends.some(
+                (f) => f.external_id === s.external_id,
+              )
+                ? "friend"
+                : "player";
               const label = p ? friendLabel(p) : s.external_id;
 
               return (
@@ -404,11 +497,23 @@ export default function StartRound() {
                       alignItems: "flex-start",
                     }}
                   >
-                    <div style={{ fontWeight: 800, minWidth: 0, flex: "1 1 160px" }}>{label}</div>
+                    <div
+                      style={{
+                        fontWeight: 800,
+                        minWidth: 0,
+                        flex: "1 1 160px",
+                      }}
+                    >
+                      {label}
+                    </div>
                     <button
                       className="auth-btn secondary"
                       style={{ padding: ".35rem .6rem", flexShrink: 0 }}
-                      onClick={() => setFriendPlayerIds((prev) => prev.filter((x) => x !== s.external_id))}
+                      onClick={() =>
+                        setFriendPlayerIds((prev) =>
+                          prev.filter((x) => x !== s.external_id),
+                        )
+                      }
                     >
                       Remove
                     </button>
@@ -443,8 +548,18 @@ export default function StartRound() {
               aria-modal="true"
               onClick={() => setAddPlayerModalOpen(false)}
             >
-              <div className="auth-card modal-card" onClick={(e) => e.stopPropagation()}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem", alignItems: "center" }}>
+              <div
+                className="auth-card modal-card"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "1rem",
+                    alignItems: "center",
+                  }}
+                >
                   <div style={{ fontWeight: 900 }}>Add player</div>
                   <button
                     className="auth-btn secondary"
@@ -456,22 +571,45 @@ export default function StartRound() {
                 </div>
 
                 {addPlayerView === "menu" && (
-                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
-                    <button className="auth-btn primary" onClick={() => setAddPlayerView("friend")}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: ".5rem",
+                      marginTop: ".75rem",
+                    }}
+                  >
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => setAddPlayerView("friend")}
+                    >
                       Add a friend
                     </button>
-                    <button className="auth-btn primary" onClick={() => setAddPlayerView("guest")}>
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => setAddPlayerView("guest")}
+                    >
                       Add a guest
                     </button>
-                    <button className="auth-btn primary" onClick={() => setAddPlayerView("search")}>
+                    <button
+                      className="auth-btn primary"
+                      onClick={() => setAddPlayerView("search")}
+                    >
                       Search for a player
                     </button>
                   </div>
                 )}
 
                 {addPlayerView === "friend" && (
-                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
-                    <div className="auth-mono">Pick from your friends list.</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: ".5rem",
+                      marginTop: ".75rem",
+                    }}
+                  >
+                    <div className="auth-mono">
+                      Pick from your friends list.
+                    </div>
                     <input
                       value={friendFilter}
                       onChange={(e) => setFriendFilter(e.target.value)}
@@ -483,24 +621,20 @@ export default function StartRound() {
                       disabled={!friends.length}
                     >
                       <option value="">Select friend…</option>
-                      {friends
-                        .filter((f) => {
-                          if (f.external_id === viewerId) return false;
-                          if (friendPlayerIds.includes(f.external_id)) return false;
-
-                          const q = friendFilter.trim().toLowerCase();
-                          if (!q) return true;
-                          const hay = `${f.name ?? ""} ${f.username ?? ""} ${f.email ?? ""}`.toLowerCase();
-                          return hay.includes(q);
-                        })
-                        .map((f) => (
-                          <option key={f.external_id} value={f.external_id}>
-                            {friendLabel(f)}
-                          </option>
-                        ))}
+                      {filteredFriends.map((f) => (
+                        <option key={f.external_id} value={f.external_id}>
+                          {friendLabel(f)}
+                        </option>
+                      ))}
                     </select>
-                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
-                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                    <div
+                      className="auth-row"
+                      style={{ justifyContent: "space-between" }}
+                    >
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => setAddPlayerView("menu")}
+                      >
                         Back
                       </button>
                       <button
@@ -519,8 +653,16 @@ export default function StartRound() {
                 )}
 
                 {addPlayerView === "guest" && (
-                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
-                    <div className="auth-mono">Guests are only saved for this round.</div>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: ".5rem",
+                      marginTop: ".75rem",
+                    }}
+                  >
+                    <div className="auth-mono">
+                      Guests are only saved for this round.
+                    </div>
                     <input
                       value={guestName}
                       onChange={(e) => setGuestName(e.target.value)}
@@ -531,13 +673,24 @@ export default function StartRound() {
                       onChange={(e) => setGuestHandicap(e.target.value)}
                       placeholder="Guest handicap (optional, e.g. +0.1)"
                     />
-                    <select value={guestGender} onChange={(e) => setGuestGender(e.target.value as "men" | "women" | "")}>
+                    <select
+                      value={guestGender}
+                      onChange={(e) =>
+                        setGuestGender(e.target.value as "men" | "women" | "")
+                      }
+                    >
                       <option value="">Gender…</option>
                       <option value="men">Men</option>
                       <option value="women">Women</option>
                     </select>
-                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
-                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                    <div
+                      className="auth-row"
+                      style={{ justifyContent: "space-between" }}
+                    >
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => setAddPlayerView("menu")}
+                      >
                         Back
                       </button>
                       <button
@@ -555,7 +708,13 @@ export default function StartRound() {
                 )}
 
                 {addPlayerView === "search" && (
-                  <div style={{ display: "grid", gap: ".5rem", marginTop: ".75rem" }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gap: ".5rem",
+                      marginTop: ".75rem",
+                    }}
+                  >
                     <input
                       value={playerSearchQ}
                       onChange={(e) => setPlayerSearchQ(e.target.value)}
@@ -564,11 +723,17 @@ export default function StartRound() {
                         if (e.key === "Enter") void searchPlayers();
                       }}
                     />
-                    <button className="auth-btn secondary" onClick={() => void searchPlayers()} disabled={!!playerSearchLoading}>
+                    <button
+                      className="auth-btn secondary"
+                      onClick={() => void searchPlayers()}
+                      disabled={!!playerSearchLoading}
+                    >
                       {playerSearchLoading ?? "Search"}
                     </button>
 
-                    {playerSearchMsg && <div className="auth-mono">{playerSearchMsg}</div>}
+                    {playerSearchMsg && (
+                      <div className="auth-mono">{playerSearchMsg}</div>
+                    )}
 
                     {!!playerSearchResults.length && (
                       <div style={{ display: "grid", gap: ".5rem" }}>
@@ -578,15 +743,25 @@ export default function StartRound() {
                             <div
                               key={p.external_id}
                               className="auth-row"
-                              style={{ justifyContent: "space-between", alignItems: "center" }}
+                              style={{
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                              }}
                             >
                               <div>
-                                <div style={{ fontWeight: 800 }}>{friendLabel(p)}</div>
-                                <div className="auth-mono">{p.email ?? p.username ?? p.external_id}</div>
+                                <div style={{ fontWeight: 800 }}>
+                                  {friendLabel(p)}
+                                </div>
+                                <div className="auth-mono">
+                                  {p.email ?? p.username ?? p.external_id}
+                                </div>
                               </div>
                               <button
                                 className="auth-btn primary"
-                                disabled={friendPlayerIds.includes(p.external_id) || selectedPlayersCount() >= 4}
+                                disabled={
+                                  friendPlayerIds.includes(p.external_id) ||
+                                  selectedPlayersCount() >= 4
+                                }
                                 onClick={() => {
                                   addFriendToRound(p.external_id);
                                   setAddPlayerModalOpen(false);
@@ -599,11 +774,20 @@ export default function StartRound() {
                       </div>
                     )}
 
-                    <div className="auth-row" style={{ justifyContent: "space-between" }}>
-                      <button className="auth-btn secondary" onClick={() => setAddPlayerView("menu")}>
+                    <div
+                      className="auth-row"
+                      style={{ justifyContent: "space-between" }}
+                    >
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => setAddPlayerView("menu")}
+                      >
                         Back
                       </button>
-                      <button className="auth-btn secondary" onClick={() => setAddPlayerModalOpen(false)}>
+                      <button
+                        className="auth-btn secondary"
+                        onClick={() => setAddPlayerModalOpen(false)}
+                      >
                         Done
                       </button>
                     </div>
@@ -627,7 +811,13 @@ export default function StartRound() {
 
       {round && (
         <div className="auth-card" style={{ display: "grid", gap: ".75rem" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "1rem",
+            }}
+          >
             <div>
               <div style={{ fontWeight: 800 }}>Round #{round.id}</div>
               <div className="auth-mono">
@@ -635,7 +825,12 @@ export default function StartRound() {
               </div>
               {(tournamentId ?? round.tournament_id) && (
                 <div className="auth-mono">
-                  Tournament: <Link to={`/tournaments/${tournamentId ?? round.tournament_id}`}>View leaderboard</Link>
+                  Tournament:{" "}
+                  <Link
+                    to={`/tournaments/${tournamentId ?? round.tournament_id}`}
+                  >
+                    View leaderboard
+                  </Link>
                 </div>
               )}
             </div>
@@ -673,7 +868,8 @@ export default function StartRound() {
                   placeholder="strokes"
                   onBlur={(e) => {
                     const v = Number(e.target.value);
-                    if (Number.isFinite(v) && v > 0) void submitScore(h.number, v);
+                    if (Number.isFinite(v) && v > 0)
+                      void submitScore(h.number, v);
                   }}
                   style={{ width: 120 }}
                 />

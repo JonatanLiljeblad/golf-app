@@ -447,6 +447,9 @@ def submit_score(
     hole_par_by_number = {h.number: h.par for h in rnd.course.holes}
     hole_par = hole_par_by_number.get(payload.hole_number)
 
+    if hole_par is None:
+        raise HTTPException(status_code=400, detail="Course hole not configured")
+
     if rnd.stats_enabled:
         if payload.putts is None or payload.gir is None:
             raise HTTPException(status_code=400, detail="putts and gir are required when stats are enabled")
