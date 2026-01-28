@@ -1,43 +1,55 @@
 # Backend (FastAPI)
 
-## Local development (uv)
+FastAPI API for the Golf App.
 
-Prereq: install `uv` (https://github.com/astral-sh/uv).
+## Prerequisites
+
+- [`uv`](https://github.com/astral-sh/uv)
+- Docker (recommended for running Postgres locally)
+
+## Environment variables
+
+Copy `backend/.env.example` to `backend/.env`.
+
+Key settings:
+
+- `DATABASE_URL`
+  - Postgres (recommended): `postgresql://golf:golf@localhost:5433/golfdb` (matches `docker compose` port mapping)
+  - SQLite fallback: `sqlite:///./golf.db`
+- Auth0 (optional)
+  - `AUTH0_DOMAIN`
+  - `AUTH0_AUDIENCE`
+  - `AUTH0_REQUIRED=true` to require a Bearer token
+
+## Local development
 
 ### Postgres (recommended)
 
 ```bash
 cd backend
 
-# Start Postgres
-# (uses localhost:5433 to avoid clashing with local Postgres on 5432)
+# Start Postgres (uses localhost:5433 to avoid clashing with local Postgres on 5432)
 docker compose up -d
 
-# Configure env
 cp .env.example .env
 
 uv venv
 uv pip install -r requirements.txt -r requirements-dev.txt
 
-# Apply migrations
 uv run alembic upgrade head
-
 uv run uvicorn app.main:app --reload
 ```
 
-Postgres management (recommended to stop it when you’re done):
+Postgres management:
 
 ```bash
 cd backend
 
-# Stop Postgres (keep data)
-docker compose down
-
-# Reset Postgres (delete all data)
-docker compose down -v
+docker compose down    # stop (keep data)
+docker compose down -v # stop + delete all local data
 ```
 
-### SQLite fallback
+### SQLite (fallback)
 
 ```bash
 cd backend
@@ -45,16 +57,15 @@ cd backend
 uv venv
 uv pip install -r requirements.txt -r requirements-dev.txt
 
-# Optional: keep using local sqlite file
-# cp .env.example .env && sed -i '' 's|^DATABASE_URL=.*|DATABASE_URL=sqlite:///./golf.db|' .env
+# Set DATABASE_URL=sqlite:///./golf.db in .env
 
 uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-### Migrations
+## Common tasks
 
-If you change models (or pull a change that adds/updates tables), run:
+### Migrations
 
 ```bash
 cd backend
@@ -69,6 +80,8 @@ uv run pytest
 ```
 
 ### Health check
+
+API base path: `/api/v1`
 
 ```bash
 curl -sS http://127.0.0.1:8000/api/v1/health

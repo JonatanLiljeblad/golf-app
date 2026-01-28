@@ -1,73 +1,49 @@
-# React + TypeScript + Vite
+# Frontend (React + TypeScript)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The Golf App frontend is a React single-page app built with Vite.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js (18+) + npm
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```bash
+cd frontend
 
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+npm install
+cp .env.example .env
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+By default, the app expects the backend at `http://127.0.0.1:8000` (see `VITE_API_BASE_URL`).
 
-```js
-// eslint.config.js
-import reactX from "eslint-plugin-react-x";
-import reactDom from "eslint-plugin-react-dom";
+Note: `VITE_API_BASE_URL` should be the backend host (do not include `/api/v1`).
 
-export default defineConfig([
-  globalIgnores(["dist"]),
-  {
-    files: ["**/*.{ts,tsx}"],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs["recommended-typescript"],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ["./tsconfig.node.json", "./tsconfig.app.json"],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+## Environment variables
+
+Copy `frontend/.env.example` to `frontend/.env` and fill in values.
+
+- `VITE_API_BASE_URL` – backend base URL (default: `http://127.0.0.1:8000`)
+- `VITE_AUTH0_DOMAIN` – Auth0 tenant domain (exclude the `https://` prefix)
+- `VITE_AUTH0_CLIENT_ID` – Auth0 application (client) ID
+- `VITE_AUTH0_AUDIENCE` – Auth0 API identifier (recommended)
+
+## Auth0 dashboard configuration
+
+In Auth0 → Application Settings:
+
+- Allowed Callback URLs: `http://localhost:5173, http://127.0.0.1:5173`
+- Allowed Web Origins: `http://localhost:5173, http://127.0.0.1:5173`
+
+If `VITE_AUTH0_AUDIENCE` is set, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
+
+## Useful commands
+
+```bash
+npm run dev
+npm run lint
+npm test
+npm run build
+npm run preview
 ```

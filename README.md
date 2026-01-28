@@ -1,21 +1,30 @@
 # Golf App
 
-A web-based golf score tracking application focused on making it quick to start a round and record scores hole-by-hole.
-
-## Tech stack
-- Frontend: React + TypeScript
-- Backend: FastAPI + PostgreSQL
-- CI/CD: GitHub Actions
+Web-based golf score tracking focused on being fast to start a round and record scores hole-by-hole.
 
 ## Features (MVP)
+
 - Create and play rounds (9/18 holes)
 - Add custom courses
 - Track scores per hole
 - View scorecards after a round
 
-## Local development
+## Tech stack
 
-### Backend
+- Frontend: React + TypeScript + Vite
+- Backend: FastAPI + PostgreSQL
+- CI/CD: GitHub Actions
+
+## Project structure
+
+- `frontend/` – React SPA (Vite)
+- `backend/` – FastAPI API + database migrations (Alembic)
+- `scripts/` – helper scripts (e.g., local smoke tests)
+- `docs/` – project documentation
+
+## Quick start (local)
+
+### 1) Backend API (FastAPI)
 
 This repo uses [`uv`](https://github.com/astral-sh/uv) for Python environment and dependency management.
 
@@ -28,72 +37,60 @@ docker compose up -d
 # Create/manage a local venv
 uv venv
 
-# Install deps (kept in requirements files for now)
+# Install deps
 uv pip install -r requirements.txt -r requirements-dev.txt
 
-# Copy env config (defaults to Postgres on localhost:5433)
+# Configure environment
 cp .env.example .env
 
 # Run migrations
 uv run alembic upgrade head
 
-# Run API
+# Start API
 uv run uvicorn app.main:app --reload
-
-# One-shot local smoke (Postgres + migrations)
-../scripts/smoke-local.sh
-
-# Smoke test
-curl -sS http://127.0.0.1:8000/api/v1/health
-
-# Run tests
-uv run pytest
 ```
 
-Notes:
-- Postgres is recommended for local development (see `backend/docker-compose.yml`, exposed on `localhost:5433`).
-- When finished, stop the local Postgres container:
+Health check (API base path: `/api/v1`):
 
-  ```bash
-  cd backend
-  docker compose down      # stop (keep data)
-  docker compose down -v   # stop + delete all local data
-  ```
+```bash
+curl -sS http://127.0.0.1:8000/api/v1/health
+```
 
-- SQLite can be used by setting `DATABASE_URL=sqlite:///./golf.db` in `backend/.env`.
+More details: see [`backend/README.md`](./backend/README.md).
 
-### Frontend
+### 2) Frontend app (React)
 
 ```bash
 cd frontend
 
-# Install deps
 npm install
-
-# Configure Auth0 + API URL
 cp .env.example .env
-
-# Run dev server
 npm run dev
-
-# Lint / test / build
-npm run lint
-npm test
-npm run build
 ```
 
-Notes:
-- The frontend requires `VITE_AUTH0_DOMAIN` and `VITE_AUTH0_CLIENT_ID` (see `frontend/.env.example`).
-- In the Auth0 Dashboard (Application settings), configure:
-  - Allowed Callback URLs: `http://localhost:5173,http://127.0.0.1:5173`
-  - Allowed Web Origins: `http://localhost:5173,http://127.0.0.1:5173`
-- If `VITE_AUTH0_AUDIENCE` is set, the frontend will request an access token and send `Authorization: Bearer ...` to the backend.
+More details: see [`frontend/README.md`](./frontend/README.md).
+
+## Configuration
+
+### Auth0 (optional)
+
+- Frontend uses Auth0 when configured via `frontend/.env`.
+- Backend requires a Bearer token when configured via `backend/.env`.
+
+See:
+- [`frontend/.env.example`](./frontend/.env.example)
+- [`backend/.env.example`](./backend/.env.example)
 
 ## Roadmap
+
 - Advanced statistics (putts, GIR, FIR)
 - Mobile app (React Native)
 - Handicap-adjusted scoring
 
+## Contributing
+
+Issues and pull requests are welcome. If you’re making a non-trivial change, please open an issue first to align on scope.
+
 ## License
 
-This project is not open source. See [`LICENSE`](./LICENSE).
+See [`LICENSE`](./LICENSE).
